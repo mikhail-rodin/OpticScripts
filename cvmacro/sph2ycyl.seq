@@ -1,0 +1,25 @@
+! converts spheres to y cylinders
+! arg1: first surface
+! arg2: last surface
+! arg3: anamorphosis
+
+rfd 1 -1 1
+chk yes
+
+lcl num ^first ^last ^i_srf ^i_fld ^i_old_fld ^old_n_fields ^new_n_fields ^A
+
+^first == #1
+^last == #2
+^A == #3
+
+if ^last < 0
+	^last == (num s)-1
+end if
+
+for ^i_srf ^first ^last
+	cyl s^i_srf
+end for
+
+vie
+go
+chk no

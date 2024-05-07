@@ -1,0 +1,24 @@
+! converts spheres to X cylinders
+chk yes
+lcl num ^first ^last ^i_srf ^i_fld ^i_old_fld ^old_n_fields ^new_n_fields ^c
+
+rfd 1 -1
+
+^first == #1
+^last == #2
+if ^last < 0
+	^last == (num s)-1
+end if
+
+del sol cuy s^first..^last ! otherwise curvature info gets lost
+for ^i_srf ^first ^last
+	cyl s^i_srf
+	^c == (cuy s^i_srf)
+	cuy s^i_srf 0
+	cux s^i_srf ^c
+end for
+
+vie
+plc s1 xz
+go
+chk no

@@ -1,0 +1,7 @@
+vie
+plc s1 xz
+do
+vpt -25 35
+rfr no
+edge no
+go

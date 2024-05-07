@@ -1,0 +1,72 @@
+ver no
+! args : index of 1st surface, Coddington bending factor
+^i_srf == #1
+^x == #2
+^xcyl_flag == -1
+^eps == 1e-12
+
+if (ind s^i_srf+1) < 1.1 and (ind s^i_srf-1) < 1.1 ! if air around
+	!then it's a lens element
+	^n == (ind s^i_srf)
+else
+	wri "can't bend anything other than a singlet with a Coddington variable"
+	rtn
+end if
+
+^c1 == (cuy s^i_srf)
+^c2 == (cuy s^i_srf+1)
+if (typ sur s^i_srf) = 'CYL' &
+		and absf(^c1) < absf(^eps) and ^c2 < ^eps
+	wri "X cylider lens"
+	^xcyl_flag == 1
+	^c1 == (cux s^i_srf)
+	^c2 == (cux s^i_srf+1)
+end if
+
+^d == (thi s^i_srf)
+^P == (^n-1)*(^c1 - ^c2 + ^d*(^n-1)*^c1*^c2/^n)
+wri "f'=" 1/^P
+
+if absf(^x-1) < ^eps ! x=1
+	! 2nd surf plano
+	^new_c1 == ^P/(^n-1)
+	^new_c2 == 0
+else if absf(^x+1) < ^eps ! x=-1
+	! 1st surf plano
+	^new_c1 == 0
+	^new_c2 == ^P/(1/^n-1) ! NB: we're coming from glass to air, so 1/n
+else 
+	^discr == ^n*^P*^d*(^x*^x-1) + ^n*^n
+	if ^discr < 0
+		wri "Extreme bending, ray failures possible."
+		wri "Using thin lens approximation"
+		^new_c1 == 0.5*^P*(^x+1)/(^n-1)
+		^new_c2 == 0.5*^P*(^x-1)/(^n-1)
+	else 
+		^scale == ^d*(^n-1)*(^x-1)
+		^new_c1 == (sqrtf(^discr)-^n)/^scale 
+		! we use the +sqrt root of the equation
+		! since the -sqrt gives negative c1 for x=0 at any P	
+		if absf(^x) < ^eps ! x = 0 
+			! eqicurvature
+			^new_c2 == - ^new_c1
+		else
+			^ratio == (^x-1)/(^x+1)
+			^new_c2 == ^ratio*^new_c1
+		end if
+	end if 
+end if
+
+if ^xcyl_flag < 0
+	cuy s^i_srf   ^new_c1
+	cuy s^i_srf+1 ^new_c2
+else
+	cux s^i_srf   ^new_c1
+	cux s^i_srf+1 ^new_c2
+end if
+^new_P == (^n-1)*(^new_c1 - ^new_c2 + ^d*(^n-1)*^new_c1*^new_c2/^n)
+wri "new f'=" 1/^new_P
+vie
+go
+
+ver yes

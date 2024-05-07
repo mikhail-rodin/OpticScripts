@@ -1,0 +1,395 @@
+!  _      _ _      _____                      
+! | |    (_) |    / ____|                     
+! | |     _| |__ | |  __  ___  ___  _ __ ___  
+! | |    | | '_ \| | |_ |/ _ \/ _ \| '_ ` _ \ 
+! | |____| | |_) | |__| |  __/ (_) | | | | | |
+! |______|_|_.__/ \_____|\___|\___/|_| |_| |_|
+!                                             
+chk yes
+! Note: in CodeV, all angles (paraxial slopes and real ray dir cosines) are specified AFTER refraction.
+!
+! In AFO/AFI mode the paraxial lens plane is treated as a faux image surface.
+!	Therefore an airspace must be present after the last element.
+
+gbl num ^g_pi ^eps ^g_i_default_zoom
+^g_pi == 4*atanf(1)
+^eps == 10e-12
+^g_i_default_zoom == 1
+
+FCT @deg2rad(num ^deg)
+END FCT ^deg*^g_pi/180
+
+FCT @afocal_zoomed(num ^i_zoom) 
+	num ^defocus ^d_
+	^d_ == (thi si-1 z^i_zoom)
+	^defocus == absf((^d_-(afo z^i_zoom))/((afo z^i_zoom)+1e-18))
+END FCT ((afc z^i_zoom) or (((afi z^i_zoom) > 1.01 or (afo z^i_zoom) > 1.01) and ^defocus < 0.5))
+
+FCT @afocal
+END FCT @afocal_zoomed(^g_i_default_zoom)
+
+FCT @conj_type
+! type of conjugates
+! 0 = inf, 1 = finite, i.e. 01 = lens, 10 = collimator
+	num ^objspace ^imspace
+	^imspace == not @afocal
+	^objspace == ((typ fld) = 'OBJ') or ((thi so) < 1e12)
+END FCT 10*^objspace + ^imspace
+
+FCT @i_last_srf 
+	num ^i
+	if (afi) > 1.1 or (afo) > 1.1
+		^i == (num s) - 2
+	else
+		! (num s) includes image plane
+		^i == (num s) - 1
+	end if
+END FCT ^i ! img = ^i + 1
+
+FCT @afocal_units2rad_scale
+! multiply by returned value to get radians
+	str ^units
+	num ^scale
+	^units == (adm)
+	if ^units = 'RAD'
+		^scale == 1
+	else if ^units = 'MR'
+		^scale == 1e-3
+	else if ^units = 'UR'
+		^scale == 1e-6
+	else if ^units = 'NR'
+		^scale == 1e-9
+	else if ^units = 'DEG'
+		^scale == ^g_pi/180
+	else if ^units = 'MIN'
+		^scale == ^g_pi/(180*60)
+	else if ^units = 'SEC'
+		^scale == ^g_pi/(180*3600)
+	end if
+END FCT ^scale
+
+FCT @refract_u(num ^u, num ^h, num ^c, num ^n12, num ^d)
+	num ^u_
+	^u_ == ^u * ^n12 - ^h * ^c * (1 - ^n12)
+END FCT ^u_
+
+FCT @dircos(num ^u, num ^n)
+! ray slope tg(U) => optical direction cosine in resp. tangential plane
+	num ^dc
+	if ^u = 0
+		^dc == 1
+	els 
+		^u == absf(^u)
+		^dc == 0.5*(-1 + sqrtf(1+4*^n*^n*^u*^u))/^u
+	end if
+END FCT ^dc
+
+FCT @arg_max_x_field
+! finds index of max X field
+	num ^maxf ^i_fld ^fld ^i_maxf
+	str ^field_type
+	^maxf == 0
+	^i_maxf == 1
+	^field_type == (typ fld)
+	for ^i_fld 1 (num f)
+		if ^field_type = 'ANG'
+			^fld == (xan f^i_fld)
+		else if ^field_type = 'OBJ'
+			^fld == (xob f^i_fld)
+		else if ^field_type = 'IMG'
+			^fld == (xim f^i_fld)
+		else if ^field_type = 'RIH'
+			^fld == (xri f^i_fld)
+		end if
+		if absf(^fld) > (absf(^maxf) + 1e-14)
+			^maxf == ^fld
+			^i_maxf == ^i_fld
+		end if
+	end for
+END FCT ^i_maxf
+
+FCT @arg_max_y_field
+! finds index of max Y field
+	num ^maxf ^i_fld ^fld ^i_maxf
+	str ^field_type
+	^maxf == 0
+	^i_maxf == 1
+	^field_type == (typ fld)
+	for ^i_fld 1 (num f)
+		if ^field_type = 'ANG'
+			^fld == (yan f^i_fld)
+		else if ^field_type = 'OBJ'
+			^fld == (yob f^i_fld)
+		else if ^field_type = 'IMG'
+			^fld == (yim f^i_fld)
+		else if ^field_type = 'RIH'
+			^fld == (yri f^i_fld)
+		end if
+		if absf(^fld) > (absf(^maxf) + 1e-14)
+			^maxf == ^fld
+			^i_maxf == ^i_fld
+		end if
+	end for
+END FCT ^i_maxf
+
+FCT @angular_magn_zoomed(num ^i_fld, num ^i_zoom)
+	lcl num ^ucx ^ucx_ ^ucy ^ucy_
+	lcl num ^i_maxf_x ^i_maxf_y ^ux_max ^uy_max
+	lcl num ^Hx ^Hy ^Vx ^Vy ^V ^g_pi ^eps ^azimuth ^i_last_srf
+	^g_pi == 3.1415926
+	^eps == ^g_pi/100 ! effectively zero field
+	^i_last_srf == @i_last_srf
+	
+	^ucx == (L r1 so f^i_fld z^i_zoom)/(N r1 so f^i_fld z^i_zoom)
+	^ucx_ == (L r1 s^i_last_srf f^i_fld z^i_zoom)/(N r1 s^i_last_srf f^i_fld z^i_zoom)
+	^ucy == (M r1 so f^i_fld z^i_zoom)/(N r1 so f^i_fld z^i_zoom)
+	^ucy_ == (M r1 s^i_last_srf f^i_fld z^i_zoom)/(N r1 s^i_last_srf f^i_fld z^i_zoom)
+	
+	if ^ucx < ^eps and ^ucy < ^eps
+		! axial
+		^V == (ucy s^i_last_srf z^i_zoom)/(ucy so z^i_zoom) ! paraxial
+	else if ^ucx > ^eps and ^ucy > ^eps
+		! skew
+		^i_maxf_x == @arg_max_x_field
+		^ux_max == tanf(^g_pi*(xan f^i_maxf_x z^i_zoom)/180)
+		^i_maxf_y == @arg_max_y_field
+		^uy_max == tanf(^g_pi*(yan f^i_maxf_y z^i_zoom)/180)
+		^Hx == tanf(^g_pi*(xan f^i_fld z^i_zoom)/180)/^ux_max
+		^Vx == ^ucx_/^ucx
+		^Hy == tanf(^g_pi*(yan f^i_fld z^i_zoom)/180)/^uy_max
+		^Vy == ^ucy_/^ucy
+		^azimuth == atanf(^Hx/^Hy)
+		^V == ^Vx*(sinf(^azimuth))**2 + ^Vy*(cosf(^azimuth))**2
+	else if ^ucx > ^eps 
+		! X field
+		^V == ^ucx_/^ucx
+	else
+		^V == ^ucy_/^ucy
+	end if
+END FCT ^V
+
+FCT @angular_magn(num ^i_fld)
+END FCT @angular_magn_zoomed(^i_fld, ^g_i_default_zoom)
+
+FCT @Vx_zoomed(num ^i_zoom)
+! generalized XZ magnification
+	num ^conjugates
+	num ^V ^i_full_fld ^i_last_srf
+	^i_full_fld == @arg_max_x_field
+	^conjugates == @conj_type
+	if ^conjugates = 1
+		^V == (efx so..i z^i_zoom)
+	else if ^conjugates = 11
+		^V == (x r1 si f^i_full_fld z^i_zoom)/(x r1 so f^i_full_fld z^i_zoom)
+	else if ^conjugates = 10
+		^i_last_srf == @i_last_srf
+		^V == (efx so..^i_last_srf z^i_zoom) ! account for dummy surfaces
+	else ! afocal
+		^V == @angular_magn_zoomed(^i_full_fld, ^i_zoom)
+	end if
+END FCT ^V
+
+FCT @Vy_zoomed(num ^i_zoom)
+! generalized YZ magnification
+	num ^conjugates
+	num ^V ^i_full_fld ^i_last_srf
+	^i_full_fld == @arg_max_y_field
+	^conjugates == @conj_type
+	if ^conjugates = 1
+		^V == (efy so..i z^i_zoom)
+	else if ^conjugates = 11
+		^V == (y r1 si f^i_full_fld z^i_zoom)/(y r1 so f^i_full_fld z^i_zoom)
+	else if ^conjugates = 10
+		^i_last_srf == @i_last_srf
+		^V == (efy so..^i_last_srf z^i_zoom)
+	else ! afocal
+		^V == @angular_magn_zoomed(^i_full_fld, ^i_zoom)
+	end if
+END FCT ^V	
+
+FCT @Vx
+END FCT @Vx_zoomed(^g_i_default_zoom)
+
+FCT @Vy
+END FCT @Vy_zoomed(^g_i_default_zoom)
+
+FCT @expp_x_zoomed(num ^i_fld, num ^i_zoom) 
+	! Distance from image to XZ-plane exit pupil.
+	! Different from sP_
+	! In AFI/AFO mode position is relative to parax lens plane,
+	! 	so that EXPD calculations work as intended.
+	num ^u ^h ^expp ^img
+	^img == @i_last_srf + 1
+	
+	^u == absf((l s^img-1 f^i_fld r1 z^i_zoom)/(n s^img-1 f^i_fld r1 z^i_zoom)) ! = tg(w)
+	if ^u < 0.01
+	! on axis, thus paraxial calculations apply
+		^expp == -(hcx s^img z^i_zoom)/(ucx s^img-1 z^i_zoom)
+	else 
+		^h == (x s^img f^i_fld r1 z^i_zoom)
+		^expp == -^h/^u
+	end if
+END FCT ^expp
+
+FCT @expp_x(num ^i_fld)
+END FCT @expp_x_zoomed(^i_fld, ^g_i_default_zoom)
+
+FCT @expp_y_zoomed(num ^i_fld, num ^i_zoom) ! from image to tangential exit pupil
+	num ^u ^h ^expp ^img
+	^img == @i_last_srf + 1
+	
+	^u == absf((m s^img-1 f^i_fld r1 z^i_zoom)/(n s^img-1 f^i_fld r1 z^i_zoom)) ! = tg(w)
+	if ^u < 0.01
+		! on axis, thus paraxial calculations apply
+		^expp == -(hcy s^img z^i_zoom)/(ucy s^img-1 z^i_zoom)
+	else 
+		^h == (y s^img f^i_fld r1 z^i_zoom)
+		^expp == -^h/^u
+	end if
+END FCT ^expp
+
+FCT @expp_y(num ^i_fld)
+END FCT @expp_y_zoomed(^i_fld, ^g_i_default_zoom)
+
+FCT @local_expp_x_after_zoomed(num ^i_fld, num ^i_srf, num ^i_zoom) ! from surface ^i_srf to the next image of the stop
+	num ^u ^h ^expp
+	^u == absf((l f^i_fld r1 s^i_srf z^i_zoom)/(n f^i_fld r1 s^i_srf z^i_zoom)) ! = tg(w)
+	if ^u < 0.01
+		! on axis, thus paraxial calculations apply
+		^expp == -(hcx s^i_srf z^i_zoom)/(ucx s^i_srf z^i_zoom)
+	else 
+		^h == (x f^i_fld r1 s^i_srf z^i_zoom)
+		^expp == -^h/^u
+	end if
+END FCT ^expp
+
+FCT @local_expp_x_after(num ^i_fld, num ^i_srf) 
+END FCT @local_expp_x_after_zoomed(^i_fld, ^i_srf, ^g_i_default_zoom) 
+
+FCT @local_expp_y_after_zoomed(num ^i_fld, num ^i_srf, num ^i_zoom) ! from surface ^i_srf to the next image of the stop
+	num ^u ^h ^expp
+	^u == absf((m f^i_fld r1 s^i_srf z^i_zoom)/(n f^i_fld r1 s^i_srf z^i_zoom)) ! = tg(w)
+	if ^u < 0.01
+		! on axis, thus paraxial calculations apply
+		^expp == -(hcy s^i_srf z^i_zoom)/(ucy s^i_srf z^i_zoom)
+	else 
+		^h == (y f^i_fld r1 s^i_srf z^i_zoom)
+		^expp == -^h/^u
+	end if
+END FCT ^expp
+
+FCT @local_expp_y_after(num ^i_fld, num ^i_srf) 
+END FCT @local_expp_y_after_zoomed(^i_fld, ^i_srf, ^g_i_default_zoom) 
+
+FCT @expd_x_zoomed(num ^i_fld, num ^i_zoom)
+	num ^sP_ ^u_upper ^u_lower ^h_upper_img ^h_lower_img 
+	num ^h_upper ^h_lower ^D ^imspace
+	^imspace == @i_last_srf
+	
+	^u_upper == (l s^imspace f^i_fld r4 z^i_zoom)/(n s^imspace f^i_fld r4 z^i_zoom) ! = tg(sigma)
+	^u_lower == (l s^imspace f^i_fld r5 z^i_zoom)/(n s^imspace f^i_fld r5 z^i_zoom) ! 
+	^h_upper_img == (x s^imspace+1 r4 f^i_fld z^i_zoom)
+	^h_lower_img == (x s^imspace+1 r5 f^i_fld z^i_zoom)
+	if absf(^u_upper-^u_lower) < 0.001
+		! collimated beam
+		! so we measure its section right at img surface
+		^D == ^h_upper_img - ^h_lower_img
+	else
+		^sP_ == @expp_x_zoomed(^i_fld, ^i_zoom)
+		^h_upper == ^h_upper_img + ^sP_*^u_upper
+		^h_lower == ^h_lower_img + ^sP_*^u_lower
+		^D == absf(^h_upper - ^h_lower)
+	end if
+END FCT ^D
+
+FCT @expd_x(num ^i_fld)
+END FCT @expd_x_zoomed(^i_fld, ^g_i_default_zoom)
+
+FCT @expd_y_zoomed(num ^i_fld, num ^i_zoom) 
+	num ^expp ^u_upper ^u_lower ^h_upper_img ^h_lower_img 
+	num ^h_upper ^h_lower ^D ^imspace
+	^imspace == @i_last_srf
+	
+	^u_upper == (m s^imspace f^i_fld r2 z^i_zoom)/(n s^imspace f^i_fld r2 z^i_zoom) ! = tg(sigma)
+	^u_lower == (m s^imspace f^i_fld r3 z^i_zoom)/(n s^imspace f^i_fld r3 z^i_zoom) 
+	^h_upper_img == (y s^imspace+1 r2 f^i_fld z^i_zoom) ! on img surface
+	^h_lower_img == (y s^imspace+1 r3 f^i_fld z^i_zoom)
+	if absf(^u_upper-^u_lower) < 0.001
+		! collimated beam
+		^D == ^h_upper_img - ^h_lower_img
+	else
+		^expp == @expp_y_zoomed(^i_fld, ^i_zoom) ! from img srf to pupil
+		^h_upper == ^h_upper_img + ^expp*^u_upper
+		^h_lower == ^h_lower_img + ^expp*^u_lower
+		! after the focal point (or caustio point if there are aberrations)
+		!  the upper and the lower rays change places
+		^D == absf(^h_upper - ^h_lower) ! thus the modulus
+	end if
+END FCT ^D
+
+FCT @expd_y(num ^i_fld) 
+END FCT @expd_y_zoomed(^i_fld, ^g_i_default_zoom) 
+
+FCT @local_expd_y_after_srf_zoomed(num ^i_fld, num ^i_srf, num ^i_zoom) 
+	num ^sP_ ^u_upper ^u_lower ^h_upper_srf ^h_lower_srf
+	num ^h_upper ^h_lower ^D
+	^u_upper == absf((m f^i_fld r2 s^i_srf z^i_zoom)/(n f^i_fld r2 s^i_srf z^i_zoom)) ! = tg(sigma)
+	^u_lower == absf((m f^i_fld r3 s^i_srf z^i_zoom)/(n f^i_fld r3 s^i_srf z^i_zoom)) ! 
+	^h_upper_srf == (y r2 f^i_fld s^i_srf z^i_zoom)
+	^h_lower_srf == (y r3 f^i_fld s^i_srf z^i_zoom)
+	if absf(^u_upper-^u_lower) < 0.001
+		! collimated beam
+		^D == ^h_upper_srf - ^h_lower_srf
+	else
+		^sP_ == @local_expp_y_after_zoomed(^i_fld, ^i_srf, ^i_zoom)
+		^h_upper == ^h_upper_srf + ^sP_*^u_upper
+		^h_lower == ^h_lower_srf + ^sP_*^u_lower
+		^D == absf(^h_upper - ^h_lower)
+	end if
+END FCT ^D
+
+FCT @local_expd_y_after(num ^i_fld, num ^i_srf)
+END FCT @local_expd_y_after_srf_zoomed(^i_fld, ^i_srf, ^g_i_default_zoom)
+
+FCT @local_expd_x_after_srf_zoomed(num ^i_fld, num ^i_srf, num ^i_zoom) 
+	num ^sP_ ^u_upper ^u_lower ^h_upper_srf ^h_lower_srf
+	num ^h_upper ^h_lower ^D
+	^u_upper == absf((l f^i_fld r4 s^i_srf z^i_zoom)/(n f^i_fld r4 s^i_srf z^i_zoom)) ! = tg(sigma)
+	^u_lower == absf((l f^i_fld r5 s^i_srf z^i_zoom)/(n f^i_fld r5 s^i_srf z^i_zoom)) ! 
+	^h_upper_srf == (x r4 f^i_fld s^i_srf z^i_zoom)
+	^h_lower_srf == (x r5 f^i_fld s^i_srf z^i_zoom)
+	if absf(^u_upper-^u_lower) < 0.001
+		! collimated beam
+		^D == ^h_upper_srf - ^h_lower_srf
+	else
+		^sP_ == @local_expp_x_after_zoomed(^i_fld, ^i_srf, ^i_zoom)
+		^h_upper == ^h_upper_srf + ^sP_*^u_upper
+		^h_lower == ^h_lower_srf + ^sP_*^u_lower
+		^D == absf(^h_upper - ^h_lower)
+	end if
+END FCT ^D
+
+FCT @local_expd_x_after(num ^i_fld, num ^i_srf)
+END FCT @local_expd_x_after_srf_zoomed(^i_fld, ^i_srf, ^g_i_default_zoom)
+
+FCT @angular_airy_rad_y_zoomed(num ^i_fld, num ^i_zoom)
+	num ^i_w_primary ^wvl ^D_
+	^i_w_primary == (ref)
+	^wvl == (wl w^i_w_primary)*1e-3 ! um
+	^D_ == @expd_y_zoomed(^i_fld, ^i_zoom)*1e3 ! um
+END FCT 1.2197*^wvl/^D_ ! radians
+
+FCT @angular_airy_rad_y(num ^i_fld)
+END FCT @angular_airy_rad_y_zoomed(^i_fld, ^g_i_default_zoom)
+
+FCT @angular_airy_rad_x_zoomed(num ^i_fld, num ^i_zoom)
+	num ^i_w_primary ^wvl ^D_
+	^i_w_primary == (ref)
+	^wvl == (wl w^i_w_primary)*1e-3 ! um
+	^D_ == @expd_x_zoomed(^i_fld, ^i_zoom)*1e3 ! um
+END FCT 1.2197*^wvl/^D_ ! radians
+
+FCT @angular_airy_rad_x(num ^i_fld)
+END FCT @angular_airy_rad_x_zoomed(^i_fld, ^g_i_default_zoom)
+
+chk no

@@ -1,0 +1,50 @@
+! inserts a bended plate
+! glass is TK21 by 
+! arg1 - surface to insert after
+! [arg2] - relative position as a fraction of the airspace
+! [arg3] - radius of bending
+! [arg4] - glasscode, TK21 by default
+
+chk yes
+ver no
+lcl num ^ins_after ^relpos ^h_elt_estimate ^aspect_ratio ^r ^glasscode
+lcl num ^d_airspace ^d_elt  ^d_before ^d_after ! axial distances
+rfd -1 0.5 200 66.51
+
+^aspect_ratio == 0.15
+
+^ins_after == #1 
+if ^ins_after < 0
+	wri "please specify the surface after which the element is inserted"
+	rtn
+end if
+^relpos == #2
+^r == #3
+^glasscode == #4
+
+! estimate the ray height
+^h_elt_estimate == ((sd s^ins_after) + (sd s^ins_after+1))/2
+^d_elt == 2*^h_elt_estimate*^aspect_ratio
+^d_airspace == (thi s^ins_after)
+^d_before == ^d_airspace*^relpos
+^d_after == ^d_airspace - ^d_elt - ^d_before
+
+ins s^ins_after+1
+ins s^ins_after+1
+thi s^ins_after ^d_before
+thi s^ins_after+1 ^d_elt
+thc s^ins_after+1 0
+thi s^ins_after+2 ^d_after
+thc s^ins_after+2 0
+GL1 s^ins_after+1 ^glasscode
+gc1 s^ins_after+1 0
+rdy s^ins_after+1 ^r
+ccy s^ins_after+1 0
+rdy s^ins_after+2 ^r
+ccy s^ins_after+2 0
+
+vie 
+go
+
+chk no
+ver yes

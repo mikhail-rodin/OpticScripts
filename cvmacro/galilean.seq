@@ -1,0 +1,54 @@
+! Generates a two-component galilean system.
+! arg1 - magnification
+! [arg2] - surface to insert after
+!		if not specified, it's inserted right before the last dummy surface
+! [arg3] - hiatus between components, auto fit if not specified
+
+ver no
+chk yes
+
+lcl num  ^f1_ ^f2_ ^L ^V ^i_ins_after ^i_srf ^d1 ^d_ ^airspace
+
+rfd -1 -1 -1
+^V == #1
+^i_ins_after == #2
+^L == #3
+if ^V < 0
+	wri "Usage: in galilean V [i_ins_after] [d]"
+	goto EXIT
+end if
+if ^i_ins_after < 0
+	for ^i_srf (num s)-1 1 -1
+		if (dum s^i_srf) = 0
+			^i_ins_after == ^i_srf
+			goto FOUND
+		end if
+	end for
+end if
+lbl FOUND
+^airspace == (thi s^i_ins_after)
+if ^L < 0
+	if ^airspace < 1
+		wri Q"Insufficiend airspace at surface 'dd' to insert a Galilean" ^i_ins_after
+		goto EXIT
+	end if
+	^L == ^airspace*0.45
+	^d1 == ^airspace*0.1
+	^d_ == ^airspace*0.1
+else 
+	^d1 == ^airspace
+	^d_ == 0
+end if
+
+^f2_ == -^L/(^V-1)
+^f1_ == -^V*^f2_
+
+wri Q"f1_ = 'gggg.gggg', f2_ = 'gggg.gggg', L = 'gggg.gggg'" ^f1_ ^f2_ ^L
+
+in ins_elt ^i_ins_after ^d1 ^f1_
+in ins_elt ^i_ins_after+2 ^L ^f2_
+thi s^i_ins_after+4 ^d_
+
+lbl EXIT
+chk no
+ver yes

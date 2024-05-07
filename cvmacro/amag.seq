@@ -1,0 +1,50 @@
+ver no
+chk yes
+! prints fields and corresponding pupils
+lcl num ^pi ^V_p ^l ^m ^n ^u_x_ ^u_y_ ^w_x ^w_y ^w_x_ ^w_y_ ^V_x ^V_y ^V
+lcl num ^sPx_ ^sPy_
+lcl num ^i_fld ^i_zoom ^i_last_srf
+lcl str ^format_dec ^format_exp
+
+^pi == 4*atanf(1)
+^i_last_srf == @i_last_srf
+for ^i_zoom 1 (num z)
+	wri Q"Configuration #'d', f = 'dddd.d' mm" ^i_zoom (efl z^i_zoom)
+	^V_p == @expd_y_zoomed(1, ^i_zoom)/(epd)
+	wri Q"V_p = D_/D ='dd.dd', 1/V_p ='dd.dd'" ^V_p 1/^V_p 
+	wri         "+---------------+------------+-----------------+---------+--------+------------+-----+"
+	wri         "| F   U_X  U_Y  | U'_X  U'_Y |  V_x  V_y    V  |    sPx_     sPy_ |  Dx_  Dy_  |  W  |"
+	wri         "+---------------+------------+-----------------+---------+--------+------------+-----+"
+	^format_exp ==  "|'dd' 'ddd.d' 'ddd.d' |'ddd.d' 'ddd.d' |'dd.dd' 'dd.dd' | '4e.4e' '4e.4e'|"
+	^format_dec == "|'dd' 'ddd.d' 'ddd.d' |'ddd.d' 'ddd.d' |'dd.dd' 'dd.dd' 'dd.dd'| '5d.2d' '5d.2d'|'ddd.d' 'ddd.d' | 'd.d' |"
+	for ^i_fld 1 (num f)
+		^l == (l r1 f^i_fld z^i_zoom)
+		^m == (m r1 f^i_fld z^i_zoom)
+		^n == (n r1 f^i_fld z^i_zoom)
+		^u_x_ == ^l/^n ! = tg(wx)
+		^u_y_ == ^m/^n
+		^w_x_ == atanf(^u_x_)*180/^pi
+		^w_y_ == atanf(^u_y_)*180/^pi
+		^w_x == (xan f^i_fld z^i_zoom)
+		^w_y == (yan f^i_fld z^i_zoom)
+		^sPx_ == @expp_x(^i_fld) + (thi s^i_last_srf)
+		^sPy_ == @expp_y(^i_fld) + (thi s^i_last_srf)
+		if ^w_x = 0
+			! paraxial
+			^V_x == (ucx z^i_zoom)/(ucx so z^i_zoom)
+		else 
+			^V_x == ^u_x_/tanf(^w_x*^pi/180)
+		end if
+		if ^w_y = 0
+			^V_y == (ucy z^i_zoom)/(ucy so z^i_zoom)
+		else
+			^V_y == ^u_y_/tanf(^w_y*^pi/180)
+		end if
+		^V == @angular_magn_zoomed(^i_fld, ^i_zoom)
+		wri Q^format_dec ^i_fld  ^w_x ^w_y ^w_x_ ^w_y_ ^V_x ^V_y ^V ^sPx_ ^sPy_ @expd_x(^i_fld) @expd_y(^i_fld) (wtf f^i_fld)
+	end for
+	wri         "+---------------+------------+-----------------+---------+--------+------------+-----+"
+	wri
+end for
+chk no
+ver yes

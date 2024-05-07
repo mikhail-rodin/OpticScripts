@@ -1,0 +1,55 @@
+! arg1 = overall number of fields incl axial
+! [arg2] = full frame heigth, x' (vertical)
+! [arg3] = full frame width, y' (horizontal)
+! [arg4] = nominal f'
+chk yes
+ver no  
+
+lcl num ^a ^b ^d ^pi ^f ^y ^u
+lcl num ^n_rings ^i_ring ^u_ring
+rfd -1 -1 -1 0
+
+^pi == 4*atanf(1)
+
+^f == #4
+^a == #2/2 ! heigth
+^b == #3/2 ! width
+^n_rings == #1
+
+if ^n_rings < 0
+	wri "Usage: fields_diag n_rings [2x] [2y] [f]"
+	goto EXIT
+end if
+
+if ^a < 0 ! no input
+	! then use env vars
+	^a == ^g_x_
+end if
+
+if ^b < 0
+	^b == ^g_y_
+end if
+
+if absf(^f) < 1e-5 ! f=0
+	if (afc)
+		wri "Afocal mode. Fields for reverse raytrace"
+		^f == ^g_afocal_f_
+	else
+		^f == ^g_nominal_f_
+	end if
+end if
+
+^y == sqrtf(^a**2+^b**2)
+^u == ^y/^f
+del fa
+for ^i_ring 0 ^n_rings-1
+	! divide field into equal-area rings
+	^u_ring == sqrtf(^i_ring/(^n_rings-1))*^u
+	ins f^i_ring+1
+	yan f^i_ring+1 atanf(^u_ring)*180/^pi
+end for
+del fl
+
+lbl EXIT
+chk no
+ver yes

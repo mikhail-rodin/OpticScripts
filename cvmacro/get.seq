@@ -1,0 +1,35 @@
+! arg0 "Restore lens from .seq"
+! arg0 "Sets title so that store.seq can be used"
+!
+! arg1 name "path"
+! arg1 type str
+! arg1 default "cv_macro:cvnewlens"
+!rfd "cv_macro:cvnewlens"
+ver no
+chk y
+lcl str ^name ^path ^title
+lcl num ^name_len
+
+rfd ''
+^name == #1
+^name_len == lenstr(^name)
+if ^name_len = 0
+	! no args
+	wri "no filepath provided in args or stored in (tit) DB item"
+	goto EXIT
+else
+	if locstr(^name, '.') = ^name_len - 3 ! if there's an extension
+		^name == substr(^name, 1, ^name_len-4) ! remove extension
+	end if
+	^path == concat(^name, '.seq')
+end if
+
+wri ^name
+in ^path
+tit ^name
+
+lbl EXIT
+vie
+go
+chk no
+ver yes

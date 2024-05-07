@@ -1,0 +1,123 @@
+! Create a relay for a given lens.
+! Old lens' image becomes the new object.
+! Relay's surface 1 is the old lens' last vertex.
+! Field curvature is accounted for.
+! [arg1] - relay's filename
+ver no
+chk yes
+
+lcl num ^waves(16) ^i_prim_wave ^n_waves ^field_x(16) ^field_y(16) ^n_fields
+lcl num ^i_fld ^i_wvl ^i_last_srf
+lcl num ^sP_ ^s_ ^expp ^D_ ^R_ ^Rvert ^ux_ ^uy_ ^pi
+lcl num ^flag_afocal
+lcl str ^filename ^wavestr
+
+rfd ''
+
+^filename == #1
+^i_last_srf == @i_last_srf
+^flag_afocal == @afocal
+^pi == 4*atanf(1)
+
+^expp == @expp_y(1) ! from img/parax lens to pupil
+^s_ == (thi s^i_last_srf) ! BFL
+^sP_ == ^expp + ^s_ ! from last srf to pupil, <0 if pupil's buried
+^D_ == @expd_y(1)
+^Rvert == (rdy s^i_last_srf)
+if ^flag_afocal
+	^R_ == (rdy si)
+	! once sP_ is calculated, we need expp and s_ only for a focal main sys
+	^expp == 1e18 ! = infty, because in a pericentric relay, (thi so) == expp
+	^s_ == -1e18  ! = infty; in a non-pericentric relay, (thi so) == -s_
+else
+	^R_ == 0
+end if
+
+^n_waves == (num w)
+for ^i_wvl 1 ^n_waves
+	^waves(^i_wvl) == (wl w^i_wvl)
+end for
+^i_prim_wave == (ref)
+
+wri ^n_waves
+wri ^waves(1)
+
+^n_fields == (num f)
+for ^i_fld 1 ^n_fields
+	if ^flag_afocal
+		^ux_ == (l r1 s^i_last_srf f^i_fld)/(n r1 s^i_last_srf f^i_fld)	
+		^uy_ == (m r1 s^i_last_srf f^i_fld)/(n r1 s^i_last_srf f^i_fld)
+		^field_x(^i_fld) == 180*atanf(^ux_)/^pi
+		^field_y(^i_fld) == 180*atanf(^uy_)/^pi 
+	else 
+		^field_x(^i_fld) == (x r1 si f^i_fld)
+		^field_y(^i_fld) == (y r1 si f^i_fld)
+	end if
+end for
+
+! now we swtich to the new system
+rdm
+len 
+dim m
+tit ^filename
+epd ^D_
+
+^wavestr == 'wl '
+for ^i_wvl 1 ^n_waves
+	^wavestr == concat(^wavestr, num_to_str(^waves(^i_wvl)))
+	^wavestr == concat(^wavestr, ' ')
+end for 
+wri ^wavestr
+$wavestr
+
+ref ^i_prim_wave
+
+if ^sP_ < 0 ! buried stop in main sys => pericentric relay
+	wri "buried stop in main system"
+	
+	so ^R_ ^expp
+	
+	s 0.0 -^sP_	! aperture
+	sto
+	
+	! pupil relief airspace
+	
+	s ^Rvert 0.0
+	slb "last_vertex"
+else ! reverse-pericentric main sys => buried-pupil relay
+	wri "image-space pericentric main system"
+	
+	so ^R_ -^s_
+	
+	s ^Rvert ^sP_
+	slb "last_vertex"
+	
+	! negative 'airspace' from relay's 1st srf to buried pupil
+	
+	s 0.0 0.0
+	sto
+end if
+
+si 0.0 0.0
+go
+
+if ^flag_afocal
+	afc yes
+	xan 0
+else
+	xob 0
+end if
+
+for ^i_fld 1 ^n_fields
+	ins f^i_fld ^field_x(^i_fld) ^field_y(^i_fld)
+end for
+del fl
+
+if ^filename <> ''
+	in store ^filename
+	ver no
+end if
+
+lbl EXIT
+chk no 
+ver yes

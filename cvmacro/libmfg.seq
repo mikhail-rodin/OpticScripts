@@ -1,0 +1,72 @@
+! manufacturability calculations
+ver no
+chk yes
+
+gbl num ^g_min_tangent_wedge_ang_sq
+^g_min_tangent_wedge_ang_sq == 17*17
+
+fct @min_edge_thi(num ^i_srf)
+	! linear approximation of tabulated recommended thicknesses from GOST
+	num ^D
+	^D == 2*(sd s^i_srf)
+end fct ^D*0.014286932 + 1.410238612
+
+fct @erf_coc_separation(num ^i_first, num ^min_sep)
+	! merit function penalty for insufficient meniscus CoC separation
+	! similar to Synopsys' ADM
+	num ^r1 ^r2 ^sep ^erf
+	^r1 == (rdy s^i_first)
+	^r2 == (rdy s^i_first+1)
+	^sep == absf(^r1-^r2)
+	^erf == @erf_opgt(^sep, ^min_sep)
+end fct ^erf
+
+fct @tangent_wedge_ang_sq(num ^i_first)
+	num ^c1 ^c2 ^h1 ^h2 ^phi
+	! angle between tangents to surfaces where they contact the centering chuck
+	! square to get rid of the modulus 
+	! which would've made for an ill-conditioned merit function
+	^c1 == (cuy s^i_first)
+	^c2 == (cuy s^i_first+1)
+	^h1 == (map s^i_first)/2
+	^h2 == (map s^i_first+1)/2	
+	^phi == 180*(asinf(^c1*^h1) - asinf(^c2*^h2))/^g_pi
+end fct ^phi*^phi ! in degrees^2
+
+FCT @chuck_decenter_tol(num ^i_first)
+	! returns tolerance in mm if the element auto-aligns
+	! or -1 if it doesn't
+	num ^phi_sq ^tol 
+	^phi_sq == @tangent_wedge_ang_sq(^i_first)
+	if ^phi_sq < ^g_min_tangent_wedge_ang_sq
+		! element freely rotates in the chuck
+		! has to be manually aligned using an autocollimator
+		! and fixed with pitch
+		^tol == -1
+	else
+		! element auto-centered by axial tightening forces' lateral components
+		^tol == 0.1/(sqrtf(^phi_sq)-7)
+		! ^friction_angle > 17 => ^tol < 0.01 or 1o um
+	end if
+END FCT ^tol
+
+fct @field_sens
+	! same as RUD in Synopsys
+	num ^sum ^i_srf
+	^sum == 0
+	for ^i_srf 1 (num s)-1
+		if absf((cuy s^i_srf)) > 0
+			! if not flat
+			^sum == ^sum + ((aoi s^i_srf r2) - (aoi s^i_srf r3))**2
+		end if
+	end for
+end fct ^sum
+
+fct @aspect_ratio(num ^i_srf)
+	num ^clear_D ^d
+	^clear_D == 2*(sd s^i_srf)
+	^d == (ct s^i_srf)
+end fct ^d/^clear_D
+
+chk no
+ver yes

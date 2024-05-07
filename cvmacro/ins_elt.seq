@@ -1,0 +1,66 @@
+! inserts a thick lens element
+! arg1 - surface to insert after
+! arg2 - distance from prev. lens
+! [arg3] - focal length, f'
+! [arg4] - glasscode, TK21 by default
+! [arg5] - aspect ratio, i.e. d/D, if positive
+!			abs center thickness, if negative
+
+chk yes
+ver no
+
+! we could've calculated distance the hard way, i.e. between principal planes
+! but this is not needed at this step
+! since the elements are generated with X=0 bending
+
+lcl num ^ins_after ^d1 ^h_elt_estimate ^aspect_ratio ^glasscode
+lcl num ^c ^n ^d ^P ^f_
+
+rfd -1 -1 200 66.51 0.12
+
+^aspect_ratio == #5
+
+^ins_after == #1 
+if ^ins_after < 0
+	wri "Usage: in ins_elt i_srf_to_insert_after s_from_prev [f'=200] [glasscode=66.51=TK21] [d/D=0.12]"
+	goto EXIT
+end if
+^d1 == #2
+if ^d1 < 0
+	wri "please specify the distance from previous surface"
+	goto EXIT
+end if
+^f_ == #3
+^glasscode == #4
+
+if ^aspect_ratio > 0
+	! estimate the ray height
+	^h_elt_estimate == ((sd s^ins_after) + (sd s^ins_after+1))/2
+	^d == 2*^h_elt_estimate*^aspect_ratio
+else
+	^d == -^aspect_ratio
+end if
+
+ins s^ins_after+1
+ins s^ins_after+1
+thi s^ins_after ^d1
+thi s^ins_after+1 ^d
+thc s^ins_after+1 0
+GL1 s^ins_after+1 ^glasscode
+gc1 s^ins_after+1 0
+
+^n == (ind s^ins_after+1)
+^P == 1/^f_
+^c == ^n/(^n-1)*(1-sqrtf(1-^d*^P/^n))/^d
+
+cuy s^ins_after+1 ^c
+ccy s^ins_after+1 0
+cuy s^ins_after+2 -^c
+ccy s^ins_after+2 0
+
+vie 
+go
+
+lbl EXIT
+chk no
+ver yes

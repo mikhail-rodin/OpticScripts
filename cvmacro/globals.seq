@@ -1,0 +1,34 @@
+! macro sets up global vars which store 'implicit' data that LDM doesn't include
+! these are 'environment variables that are set from either lens files or env files
+! * all env vars are spec'd for left-to-right raytrace;
+!   for reverse raytrace local per-lens vars need to be calculated.
+!	It's this way because raytrace direction can vary between subsystems.
+
+! focal length of a thin lens with a required FOV
+gbl num ^g_nominal_f_ ! f' specified on lens' label
+! * used in field/pupil calculations
+! * f' of the X section if there's anamorphosis
+
+! focal length of a lens fitted after an afocal attachment
+gbl num ^g_afocal_f_ ! actual f' of main lens
+! * in a classic anamorphic lens, afocal_f_ = nominal_f_
+! * for double-anamorphic lenses (squeeze both in X and Y planes)
+!   these f' values will differ.
+! * used by ray.seq for converting angular aberrations into linear
+
+! paraxial f/no
+gbl num ^g_fno0
+
+! paraxial anamorphosis
+gbl num ^g_anamorphosis0
+! 0.5 for 2x squeeze, regardless the configuration (single- or double-plane)
+
+! image format - specify half field
+! wider field is Y
+gbl num ^g_x_ ^g_y_
+! x_ = nominal_f_ * tan(fld_x)
+! y_ = nominal_f_ * anamorphosis0 * tan(fld_y)
+
+! paraxial magnification
+gbl num ^g_V0_x ^g_V0_y
+! ^anamorphosis0 = V0_y/V0_x

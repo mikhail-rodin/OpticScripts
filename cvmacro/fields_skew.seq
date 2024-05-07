@@ -1,0 +1,63 @@
+! arg1 = full frame heigth, x' (vertical)
+! arg2 = full frame width, y' (horizontal)
+! arg3 = nominal f'
+
+chk yes
+lcl num ^a ^b ^d ^pi ^f ^u_x ^u_y
+rfd -1 -1 0
+
+^pi == 4*atanf(1)
+
+^f == #3
+^a == #1/2 ! heigth
+^b == #2/2 ! width
+
+if ^a < 0 ! no input
+	! then use env vars
+	^a == ^g_x_
+end if
+
+if ^b < 0
+	^b == ^g_y_
+end if
+
+if absf(^f) < 1e-5 ! f=0
+	^f == ^g_afocal_f_
+end if
+
+del fa
+
+ins f1 ! axial
+yan f1 0
+
+^u_x == ^a/^f
+^u_y == ^b/^f
+
+ins f2
+yan f2 atanf(0.5*^u_y)*180/^pi
+ins f3
+yan f3 atanf(0.7*^u_y)*180/^pi
+ins f4
+yan f4 atanf(^u_y)*180/^pi
+wtf f4 0.7
+
+ins f5
+xan f5 atanf(0.5*^u_x)*180/^pi
+ins f6
+xan f6 atanf(0.7*^u_x)*180/^pi
+ins f7
+xan f7 atanf(^u_x)*180/^pi
+wtf f7 0.7
+
+ins f8
+xan f8 atanf(0.7*^u_x)*180/^pi
+yan f8 atanf(0.7*^u_y)*180/^pi
+
+ins f9
+xan f9 atanf(^u_x)*180/^pi
+yan f9 atanf(^u_y)*180/^pi
+wtf f9 0.7
+
+del fl
+
+chk no

@@ -1,0 +1,61 @@
+! add a cemented surface with TF5
+! arg1 - first surface of element
+! [arg2] - glasscode, TF5 by default
+! dependencies: libmfg
+
+chk yes
+ver no
+lcl num ^i_s_elt ^glasscode ^d_elt0 ^sd_elt ^d_min ^min_aspect ^delta_d
+rfd -1 755.275
+
+^min_aspect == 0.08
+^i_s_elt == #1
+if ^i_s_elt < 0
+	wri "please specify the surface after which the element is inserted"
+	rtn
+end if
+^glasscode == #2
+
+^d_elt0 == (thi s^i_s_elt)
+^sd_elt == (sd s^i_s_elt)
+
+if (ct s^i_s_elt) > (et s^i_s_elt)
+	! positive lens
+	^d_min == ^min_aspect*2*^sd_elt
+else
+	^d_min == @min_edge_thi(^i_s_elt)
+end if
+
+^delta_d == ^d_elt0 - 2*^d_min
+if ^delta_d < 0
+! not enough thickness to just split into halves
+	! we need to make the element thicker first
+	if (thi s^i_s_elt+1) > -1.5*^delta_d
+		!there's enough space to the right of the element
+		in move_srf ^i_s_elt+1 -^delta_d
+	else 
+		! maybe then there's space to the left?
+		if (thi s^i_s_elt-1) > -1.5*^delta_d
+			! there is
+			in move_srf ^i_s_elt ^delta_d
+		else
+			! there's not enough on either sides
+			wri "Not enough element thickness or surrounding airspace to expand it"
+			rtn
+		end if
+	end if
+end if
+^d_elt0 == (thi s^i_s_elt)
+ins s^i_s_elt+1
+cuy s^i_s_elt+1 (cuy s^i_s_elt)
+thi s^i_s_elt+0 ^d_elt0/2
+thi s^i_s_elt+1 ^d_elt0/2
+thc s^i_s_elt+1 0
+gl1 s^i_s_elt+1 ^glasscode
+gc1 s^i_s_elt+1 0
+	
+vie
+go
+
+chk no
+ver yes

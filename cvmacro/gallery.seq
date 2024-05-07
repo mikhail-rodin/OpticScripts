@@ -1,0 +1,73 @@
+! Parses output of Global Search.
+! Fills in a lens gallery in buffer ^i_out_buf
+! that can be browsed using gsview.seq macro.
+! Creates a global var for an index in the gallery.
+ver no
+chk yes
+
+gbl num ^g_i_gs_lens
+lcl num ^firstrow ^lastrow ^row_rank_start ^col_rank_start ^i_gs_run ^search_depth
+lcl num ^i_row ^i_b0_row ^i_lens ^parse_num ^i_out_buf ^erf
+lcl str ^lensname ^cell_type
+
+! constants/settings
+^search_depth == 500 ! lines before buffer end
+^i_out_buf == 4
+
+! parse the output of global search
+
+^lastrow == (buf.lst b0)
+^firstrow == ^lastrow - ^search_depth
+if ^firstrow < 1
+	^firstrow == 1
+end if
+
+^row_rank_start == -1
+buf fnd b0 i^firstrow..^lastrow "<RANK>"
+for ^i_gs_run 1 200 ! a while loop would be prone to freeze here
+	! in case mulpiple GS runs appear in the last ^search_depth rows,
+	! we find the last one
+	if (buf.fnd)
+		! last search succesful
+		^row_rank_start == (buf.i b0) + 2
+		^col_rank_start == (buf.j b0)
+		buf fnd fwd ! next GS run, if there are any
+	else
+		goto END_SEARCH
+	end if
+end for
+lbl END_SEARCH
+
+if ^row_rank_start < 0 or ^col_rank_start <> 1
+	wri Q"Could not find a GS ranking in the last 'dddddd' lines of command line" ^search_depth
+	goto EXIT
+end if
+
+! fill in the target buffer
+buf del b^i_out_buf
+^i_lens == 0
+for ^i_row 1 200
+	^i_b0_row == ^row_rank_start + ^i_row
+	^cell_type == (buf.typ b0 i^i_b0_row j1)
+	if ^cell_type <> "NUM"
+		goto END_PARSE
+	end if
+	^parse_num == (buf.num b0 i^i_b0_row j1)
+	if ^parse_num = (^i_lens + 1)
+		! ordinal is in sequence, so it's the right list and it's not the end
+		^i_lens == ^parse_num
+		^lensname == (buf.str b0 i^i_b0_row j2)
+		^erf == (buf.num b0 i^i_b0_row j3)
+		buf put b^i_out_buf i^i_lens j1 ^lensname ^erf
+	else 
+		goto END_PARSE
+	end if
+end for
+lbl END_PARSE
+wri Q"Found 'dddd' lenses." ^i_lens
+
+^g_i_gs_lens == 1
+
+lbl EXIT 
+chk no
+ver yes

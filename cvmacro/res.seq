@@ -1,0 +1,323 @@
+! resolution analysis
+! assumes reverse raytrace for an afocal lens
+! arg1: SSI scale, 0 to turn off plotting
+ver no
+chk yes
+! dependencies: libgeom for angular_airy_rad and angular_magn
+lcl str ^units ^format ^hline ^unit_header ^main_header ^airy_format
+lcl num ^i ^j ^scale ^firstrow ^lastrow 
+lcl num ^d_spot ^u_spot ^spot_mean ^spot_sum ^spot_max
+lcl num  ^V0 ^V0rev ^V ^Vrev ^fy ^fy_ ^f_afi ^p_
+lcl num ^d_airy ^u_airy ^NA ^n_spots
+lcl num ^flag_finite_conj ^flag_revlens ^flag_afocal
+lcl num ^i_last_srf 
+lcl num ^i_zoom ^i_spot ^i_fld ! n_spots = n_fld X n_zooms
+lcl num ^spots(100) 
+lcl num ^mtfdata(6) ^diflimit ^azimuth ^mtf ^e
+lcl str ^mtftype ^target_type
+
+rfd -1
+^scale == #1
+^target_type == 'SWQ' ! can be also 'SIN'
+
+! ==========================================================================================================
+! spot diagram silent evaluation
+! ==========================================================================================================
+pos za y
+^firstrow == (buf.lst b0)+1 ! so that we search only in the latest data 
+if ^firstrow < ((buf.len) - 500)
+	! not enough address space in B0
+	buf del b0 
+	^firstrow == 1
+end if
+buf yes
+spo
+plo no
+go
+buf no
+^lastrow == (buf.lst b0)
+
+! ==========================================================================================================
+! parse out all the spot sizes
+! ==========================================================================================================
+
+^n_spots == 0
+^spot_sum == 0
+^spot_max == 0
+buf fnd b0 i^firstrow..^lastrow "RMS spot diameter"
+for ^i_spot 1 100 ! not a while-loop to avoid freezes 
+	if (buf.fnd) ! last search successful
+		^n_spots == ^n_spots + 1
+		^i == (buf.i b0) ! row
+		^j == (buf.j b0) ! col 
+		^spots(^n_spots) == (buf.num b0 i^i+1 j5) ! in lens units
+		if ^spots(^n_spots) > ^spot_max
+			^spot_max == ^spots(^n_spots)
+		end if
+		^spot_sum == ^spot_sum + ^spots(^n_spots)
+		buf fnd fwd ! search for next entry
+	else 
+		goto SPT_PARSE_EXIT
+	end if
+end for
+lbl SPT_PARSE_EXIT
+
+if ^n_spots < 1
+	wri "No fields set"
+	goto EXIT
+end if
+
+^spot_mean == ^spot_sum/^n_spots
+
+! ==========================================================================================================
+! draw rayfans with scale deduced from spot diagrams
+! ==========================================================================================================
+if ^scale < -.9
+	! if not specified in args
+	! then we set it automatically
+	^scale == (^spot_mean+^spot_max)/2
+end if
+if (num z) > 1
+	! plot first and last zoom position
+	pos z1 only y
+	pos zl y ! last
+	if (num f) < 6 ! only 5 plots per page possible
+		wnd ope 2 
+	else
+		wnd ope 4
+	end if
+end if
+if absf(^scale)>1e-5
+	rim
+	nrd 200
+	ep yes
+	cab yes
+	ssi ^scale
+	go
+	wri
+end if
+
+! ==========================================================================================================
+! print out
+! ==========================================================================================================
+pos za y ! CodeV sees inactive indices as out of bounds
+for ^i_zoom 1 (num z)
+	^flag_revlens == 0 ! reversed finite-to-inf system
+	
+	^flag_afocal == @afocal_zoomed(^i_zoom)
+	! for some reason (afi) always returns 1 on focal zoom positions
+	!	if at least one position is afocal
+	if (afi z^i_zoom) >  1.1
+		^i_last_srf == (num s) - 2
+	else 
+		^i_last_srf == (num s) - 1
+	end if 
+	
+	if not ^flag_afocal and absf((thi so z^i_zoom)) < 1e5
+		^flag_finite_conj == 1
+	else
+		^flag_finite_conj == 0
+		if (typ fld) = 'OBJ'
+			^flag_revlens == 1
+		end if
+	end if
+	wri
+	wri "Configuration #" ^i_zoom
+	! ======================================================================================================
+	! format strings & difraction limits
+	^u_airy == 2*@angular_airy_rad_y_zoomed(1, ^i_zoom) ! in radians
+	if ^flag_afocal
+		^units == lowcase((adm))
+		if ^flag_revlens
+		! finite object-side conjugates
+			if (afc z^i_zoom)
+				^fy_ == (efl z^i_zoom)
+			else ! afocal w/ paraxial lens
+				^fy == (efy z^i_zoom so..i-2) 
+				^fy_ == maxf((afi z^i_zoom), (afo z^i_zoom))
+				^V0 == (red z^i_zoom)
+			end if
+			^d_airy == ^u_airy*^fy_*1e3
+			wri Q"Reversed lens. '4g.4g'/'dd.dd'" ^fy ^fy/(exd z^i_zoom)
+			^hline ==       "+-----------+--------+---------------+--------------+"
+			^format == "| 'dd.d' 'dd.d' |'dddd.dd' |'ddd.dd'  'dddd.d' |'dddd.d'   'dd.d' |	"
+			^airy_format == "|    Airy   |        |'ddd.dd'  'dddd.d' |'dddd.d'   'dd.d' |"
+			^main_header == "|   Field   |        |  Object space |  Image space |"
+			^unit_header == "|  X     Y  |    f   |  uM    cyc/mm |  'ccc'  cyc/'ccc'|"
+		else ! actually afocal
+			^fy_ == (afi)
+			^V0 == (ucy s^i_last_srf z^i_zoom)/(ucy so z^i_zoom) 
+			^V0rev == 1/^V0 ! assume reverse raytrace
+			^d_airy == ^u_airy*^V0rev*^g_afocal_f_*1e3
+			wri Q"Afocal. For f = 'dddd.d', V = 'dd.dd' in a reverse raytrace:" ^g_afocal_f_ ^V0
+			
+			if ^units = 'sec'
+				^hline ==       "+-----------+------+---------------+------------------------------+"
+				^format == "| 'dd.d' 'dd.d' | 'd.dd' |'dddd.d'  'dd.ddd' |'dddd.d'  'dd.ddd'   'ddd.dd'  'dddd' |"
+				^airy_format == "|    Airy   |      |'dddd.d'  'dd.ddd' |'dddd.d'  'dd.ddd'   'ddd.dd'  'dddd' |"
+				^main_header == "|   Field   | Magn |  Object space |          Image space         |"
+				^unit_header == "|  X     Y  |  V   |  'ccc'  cyc/'ccc' |  'ccc'   cyc/'ccc'    uM  cyc/mm |"
+			else 
+				^hline ==       "+-----------+------+---------------+------------------------------+"
+				^format == "| 'dd.d' 'dd.d' | 'd.dd' |'dddd.d'  'dd.ddd' |'dddd.d'  'dd.ddd'   'ddd.dd'  'dddd' |"
+				^airy_format == "|    Airy   |      |'dddd.d'  'dd.ddd' |'dddd.d'  'dd.ddd'   'ddd.dd'  'dddd' |"
+				^main_header == "|   Field   | Magn |  Object space |          Image space         |"
+				^unit_header == "|  X     Y  |  V   |  'ccc'  cyc/'ccc' |  'ccc'   cyc/'ccc'    uM  cyc/mm |"
+			end if
+		end if
+		^u_airy == ^u_airy/@afocal_units2rad_scale ! convert to lens units
+	else ! focal lens
+		^units == lowcase((dim))
+		if ^units = 'm' and ^scale > 1 ! mm
+			^units == 'mm'
+		else
+			^units == 'um'
+		end if
+		if ^flag_finite_conj 
+			! the typical Airy diameter formula where NA is substituted with D/f' 
+			!   obviously doesn't work when the beam of diamerer D is not collimated.
+			^p_ == @expp_y_zoomed(1, ^i_zoom)
+			^d_airy == ^u_airy*^p_*1e3 ! in um
+			^hline ==       "+------------+-------+----------------+----------------+"
+			if ^units = 'um'
+				^format == "|'ddd.d' 'ddd.d' | 'ddd.d' |'dddd.dd'   'ddddd' |  'ddd.d'   'dddd' |"
+				^airy_format == "|          Airy      |'dddd.dd'   'ddddd' |  'ddd.d'   'dddd' |"
+			else ! mm
+				^format == "|'ddd.d' 'ddd.d' | 'ddd.d' |'dddd.dd'   'ddddd' |  'dd.dd'   'dd.dd' |"
+				^airy_format == "|          Airy      |'dddd.dd'   'ddddd' |  'dd.dd'   'dd.dd' |"
+			end if 
+			^main_header == "|    Field   |  Magn |   Object space |    Image space |"
+			^unit_header == "|  X      Y  |   V   |  'ccc'   cyc/'ccc' |   'ccc'   cyc/mm |"
+			! transverse units => y' = u'*f'
+			wri "Finite conjugates. f' = " (efl z^i_zoom)		
+		else
+			^d_airy == ^u_airy*(efl z^i_zoom)*1e3 ! in um, assumes millimeters
+			^hline ==       "+-----------+-------------------------+"
+			^format ==      "|'dd.d'  'dd.d' |'dddddd.d'    'dddd'    'd.dd' |"
+			^airy_format == "|    Airy   |'dddddd.d'    'dddd'    'd.dd' |"
+			^main_header == "|   Field   |    Image space          |"
+			^unit_header == "|  X     Y  |   uM     cyc/mm  @  mod |"
+			wri "Focal lens. f' = " (efl z^i_zoom)
+		end if
+	end if
+	! =================================================================================================================
+	! 1. print header
+	wri ^hline
+	wri ^main_header
+	if ^flag_afocal
+		if ^flag_revlens
+			wri Q^unit_header ^units ^units
+		else
+			wri Q^unit_header ^units ^units ^units ^units
+		end if
+	else if ^flag_finite_conj
+		wri Q^unit_header 'uM' 'mm' ^units
+	else 
+		wri Q^unit_header
+	end if
+	wri ^hline
+	! =================================================================================================================
+	! 2. print resolution numbers
+	for ^i_fld 1 (num f)
+		^i_spot == (^i_zoom - 1)*(num f) + ^i_fld
+		
+		if ^flag_afocal
+			^V == @angular_magn_zoomed(^i_fld, ^i_zoom)
+			^Vrev == 1/^V
+
+			if (afc z^i_zoom) ! angylar-measure afocal
+				^u_spot == ^spots(^i_spot) ! in afocal units
+				^d_spot == tanf(^u_spot*@afocal_units2rad_scale)*^fy_ ! in mm
+			else ! afocal with perfect lens in img space
+				^u_spot == ^spots(^i_spot) ! first we retrieve the linear measure in img space
+				^d_spot == ^u_spot/^V0 ! spotsize on sensor in mm (obj in reverse raytrace)
+				^u_spot == atanf(^u_spot/^fy_) ! in radians
+				^u_spot == ^u_spot/@afocal_units2rad_scale ! in afocal units from (adm)
+			end if
+			! => u in (adm) units, d in mm
+			
+			if ^flag_revlens
+				wri Q^format (xob f^i_fld z^i_zoom) (yob f^i_fld z^i_zoom) &
+					^fy_ 1e3*^d_spot 1/^d_spot ^u_spot 1/^u_spot
+			else 
+				^d_spot == ^u_spot*@afocal_units2rad_scale*^Vrev*^g_afocal_f_ ! in mm
+				wri Q^format (xan f^i_fld z^i_zoom) (yan f^i_fld z^i_zoom) &
+					^V ^u_spot 1/^u_spot ^u_spot*^Vrev 1/(^u_spot*^Vrev) 1e3*^d_spot 1/^d_spot
+			end if
+		
+		else if ^flag_finite_conj
+			^V == (red z^i_zoom) ! (red) = -1/magn
+			^Vrev == 1/^V
+			^d_spot == 1e3*^spots(^i_spot) ! in um
+
+			if ^units = 'um'
+				wri Q^format absf((xob f^i_fld z^i_zoom)) absf((yob f^i_fld z^i_zoom)) &
+					^V absf(^d_spot/^V) absf(1e3/(^d_spot/^V)) &
+					^d_spot 1e3/^d_spot
+			else ! img space in mm
+				wri Q^format absf((xob f^i_fld z^i_zoom)) absf((yob f^i_fld z^i_zoom)) &
+					^V absf(^d_spot/^V) absf(1e3/(^d_spot/^V)) &
+					1e-3*^d_spot 1e3/^d_spot
+			end if
+
+		else ! inf-to-finite lens
+		
+			^d_spot == 1e3*^spots(^i_spot)
+			
+			if ^d_spot/^d_airy < 3 
+				^mtftype == 'DIF'
+			else 
+				^mtftype == 'GEO'
+			end if
+			
+			out no
+			^e == mtf_1fld(^i_zoom, ^i_fld, 1e3/^d_spot, 0, 30, ^mtfdata, ^mtftype, ^target_type)
+			out yes
+			^mtf == ^mtfdata(1)
+			^diflimit == ^mtfdata(4) 
+			
+			wri Q^format (xan f^i_fld z^i_zoom) (yan f^i_fld z^i_zoom) ^d_spot 1000/^d_spot ^mtf
+	
+		end if
+		
+	end for ! next field
+	wri ^hline
+	! ======================================================================================================
+	! 3. print airy spot size and resolution limit
+	if ^flag_afocal
+		if ^flag_revlens
+			wri Q^airy_format ^d_airy 1e3/^d_airy ^u_airy 1/^u_airy 
+		else
+			wri Q^airy_format ^u_airy 1/^u_airy &
+				^u_airy*^V0rev 1/(^u_airy*^V0rev) ^d_airy 1000/^d_airy
+		end if
+	else if ^flag_finite_conj
+		if ^units = 'um'
+			wri Q^airy_format absf(^d_airy*^Vrev) absf(1000/(^d_airy*^Vrev)) &
+				^d_airy 1000/^d_airy
+		else ! mm 
+			wri Q^airy_format absf(^d_airy*^Vrev) absf(1000/(^d_airy*^Vrev)) &
+				1e-3*^d_airy 1e3/^d_airy
+		end if 
+	else
+		wri Q^airy_format ^d_airy 1000/^d_airy ^diflimit
+	end if
+	wri ^hline
+end for ! next zoom
+
+wri
+
+if ^flag_revlens
+	if (afi)
+		wri Q"Ray plot vertical scale is 'ggg.gggg' 'ccc'" ^scale ^units
+	else 
+		wri Q"Ray plot vertical scale is 'ggg.gggg' 'ccc' / 'ggg.gggg' um" & 
+			^scale ^units ^scale*@afocal_units2rad_scale*^fy_*1e3	
+	end if
+else
+	wri Q"Ray plot vertical scale is 'ggg.gggg' 'ccc'" ^scale ^units
+end if
+
+lbl EXIT
+chk no
+ver yes

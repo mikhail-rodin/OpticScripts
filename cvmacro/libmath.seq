@@ -1,0 +1,39 @@
+ver no
+chk yes
+
+FCT @chebyshev_nodes(num ^nodes(16), num ^n, num ^a, num ^b)
+	num ^i
+	for ^i 1 ^n
+		^nodes(^i) ==  0.5*(^a+^b) + 0.5*(^b-^a)*COSF((^i - 0.5)*3.1415926/^n)
+	end for
+END FCT 0
+
+FCT @heaviside(num ^x)
+	num ^y
+	if ^x > 0
+		^y == 1
+	else 
+		^y == 0
+	end if
+END FCT ^y
+
+fct @erf_opgt(num ^x, num ^x_min)
+	num ^erf
+	if ^x > ^x_min
+		^erf == 0
+	else 
+		^erf == ^x_min - ^x
+	end if
+end fct ^erf*^erf
+
+fct @erf_oplt(num ^x, num ^x_max)
+	num ^erf
+	if ^x < ^x_max
+		^erf == 0
+	else 
+		^erf == ^x - ^x_max
+	end if
+end fct ^erf*^erf
+
+chk no
+ver yes

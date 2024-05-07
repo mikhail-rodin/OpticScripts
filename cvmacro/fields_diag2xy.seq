@@ -1,0 +1,55 @@
+! Convert a diagonal field to rectangular.
+! Diag field must be specified as Y field.
+! arg1 = 1/AR = y'/x'
+
+ver no
+chk yes
+
+lcl num ^format ^y_fields(256) ^i_fld ^i_y_fld ^n_diag_fields ^fld ^pi
+lcl str ^field_type
+
+rfd -1
+^format == 1/#1
+if ^format < 0
+	wri "Please specify the inverse (y/x) aspect ratio"
+	goto EXIT
+end if
+^pi == 4*atanf(1)
+^n_diag_fields == (num f)
+^field_type == (typ fld)
+for ^i_fld 1 ^n_diag_fields
+	if ^field_type = 'ANG'
+		^fld == tanf(^pi*(yan f^i_fld)/180)
+		^y_fields(^i_fld) == 180*atanf(^fld/(1+^format**2))/^pi
+	else 
+		if ^field_type = 'OBJ'
+			^fld == (yob f^i_fld)
+		else if ^field_type = 'IMG'
+			^fld == (yim f^i_fld)
+		else if ^field_type = 'RIH'
+			^fld == (yri f^i_fld)
+		else
+			wri "Unrecognized field spec"
+			goto EXIT
+		end if
+		^y_fields(^i_fld) == ^fld/(1+^format**2)		
+	end if
+end for
+del f2..l
+
+for ^i_y_fld 2 ^n_diag_fields ! Y fields
+	ins f^i_y_fld 0 ^y_fields(^i_y_fld)
+end for
+^i_fld == ^n_diag_fields + 1
+for ^i_y_fld 2 ^n_diag_fields ! X fields
+	ins f^i_fld ^format*^y_fields(^i_y_fld) 0
+	^i_fld == ^i_fld + 1
+end for
+for ^i_y_fld 2 ^n_diag_fields
+	ins f^i_fld ^format*^y_fields(^i_y_fld) ^y_fields(^i_y_fld) 
+	^i_fld == ^i_fld + 1
+end for
+
+lbl EXIT
+chk no
+ver yes

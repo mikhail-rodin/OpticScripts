@@ -1,0 +1,107 @@
+! Save lens to seq
+! LEN format has been broken ever since CodeV run on NT, specifically, constrains exhibit
+! erratic behaviour when certain bytes in .len get corrupted as they often do
+
+! if arg1 starts with an _underscore, it'll be appended as a postfix
+! if arg1 starts with '+' the last digit in the name is incremented
+! if arg1 starts with ':', arg1 becomes a new name
+! otherwise an existing file is attempted to be overwritten
+ver no
+chk y
+lcl str ^path ^name ^response ^flag ^promt
+lcl num ^ordinal ^path_len ^name_len
+rfd ''
+
+^path == (tit)
+^path_len == lenstr(^path)
+if ^path_len = 0
+	wri "Empty basename. Enter lens title."
+	goto EXIT
+end if
+if locstr(^path, '.') = ^path_len - 3 ! if there's an extension
+	^path == substr(^path, 1, ^path_len-4) ! remove extension
+end if
+
+^name == #1
+^name_len == lenstr(^name)
+^flag == substr(^name, 1, 1)
+if ^name = ''
+	if (tit) = ''
+		wri "Please specify a title (TIT title) - it'll be used as a default filename"
+		wri "Input title? [Y/N]"
+		rea Q"'c'" ^response
+		if substr(upcase(^response),1,1) = 'Y'
+			! promt for a new name
+			lbl TITLE_PROMT
+			rpr 'TITLE>'
+			rea ^promt
+			rpr
+			^promt == trunc(^promt)
+			tit ^promt
+			if lenstr(^promt) < 2
+				wri "Please provide a title at least 2 chars long"
+				goto TITLE_PROMT
+			end if
+		else
+			goto EXIT
+		end if
+	end if
+	
+	! use original filename or optionaly change
+	wri "? Save as " ^path 
+	wri '[Y]es/[N]o/[R]ename?'
+	rea Q"'c'" ^response
+	if substr(upcase(^response),1,1) = 'R'
+		! promt for a new name
+		lbl FNAME_PROMT
+		rpr 'FILENAME>'
+		rea ^promt
+		rpr
+		if lenstr(^promt) < 2
+			wri "Please provide a filename at least 2 chars long"
+			goto FNAME_PROMT
+		end if
+		^path == trunc(^promt)
+	else if substr(upcase(^response),1,1) <> 'Y'
+		! no permission granted
+		wri "File not saved"
+		goto EXIT
+	end if
+	^response == 'n'
+else if ^flag = '_'
+	if ^name_len = 1
+
+	else
+		wri 'Postfix mode'
+		^path == concat(^path, substr(^name, 2, ^name_len)) ! excl leading '_'
+	end if
+else if ^flag = '+'
+	! increment the ordinal at the end
+	^path_len == lenstr(^path)
+	^ordinal == str_to_num(substr(^path, ^path_len-1, ^path_len))
+	if ^ordinal = 0	! returned when conversion is unsuccessful
+		wri "Name ends with either a letter or zero. Ordinal cannot be incremented"
+		goto EXIT
+	else
+		^ordinal == ^ordinal + 1
+		^path == concat(substr(^path, 1, ^path_len-1), num_to_str(^ordinal))
+	end if
+else if ^flag = ':'
+	! new name
+	^path == substr(^name, 2, lenstr(^name))
+end if
+
+der def ! reset optimization increments
+! often increments get extra small (1e-12..e-10) after a couple runs
+! this should set them to e-4..e-3
+
+wri ^path
+tit ^path
+sav concat(^path, ".len")
+^path == concat(^path, ".seq")
+wrl ^path ! write .seq
+in ^path ! reload the same lens with reset increments
+
+lbl EXIT
+ver yes
+chk no

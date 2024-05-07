@@ -1,0 +1,75 @@
+! Convert an XY rectangular field spec into an equivalent diagonal,
+! i.e. inscribe the frame into a circle
+! arg1 - number of field points
+ver no
+chk yes
+
+lcl num ^x_field ^full_x_field 
+lcl num ^y_field ^full_y_field 
+lcl num ^full_diag_field ^i_fld ^fld
+lcl num ^pi ^n_rings
+lcl str ^field_type
+
+rfd -1
+
+^pi == 4*atanf(1)
+
+^n_rings == #1
+if ^n_rings < 0
+	wri "Usage fields_xy2diag n_rings"
+	goto EXIT
+end if
+
+! find the full field
+^field_type == (typ fld)
+^full_y_field == 0
+^full_x_field == 0
+for ^i_fld 1 (num f)
+	if ^field_type = 'ANG'
+		^x_field == (xan f^i_fld)
+		^y_field == (yan f^i_fld)
+	else if ^field_type = 'OBJ'
+		^x_field == (xob f^i_fld)
+		^y_field == (yob f^i_fld)
+	else if ^field_type = 'IMG'
+		^x_field == (xim f^i_fld)
+		^y_field == (yim f^i_fld)
+	else if ^field_type = 'RIH'
+		^x_field == (xri f^i_fld)
+		^y_field == (yri f^i_fld)
+	else
+		wri "Unrecognized field spec"
+		goto EXIT
+	end if
+	if absf(^y_field) > absf(^full_y_field)
+		^full_y_field == ^y_field
+	end if
+	if absf(^x_field) > absf(^full_x_field)
+		^full_x_field == ^x_field
+	end if
+end for
+wri Q"Full field: '4g.4g' x '4g.4g'" ^full_x_field ^full_y_field
+
+! calculate radial field
+if ^field_type = 'ANG'
+	^full_x_field == tanf(^pi*^full_x_field/180)
+	^full_y_field == tanf(^pi*^full_y_field/180)
+	^full_diag_field == sqrtf(^full_x_field**2 + ^full_y_field**2) 
+	^full_diag_field == 180*atanf(^full_diag_field)/^pi
+else
+	^full_diag_field == sqrtf(^full_x_field**2 + ^full_y_field**2) 
+end if
+
+! fill out the field spec
+del f2..l
+wri "Field points added:"
+for ^i_fld 2 ^n_rings
+	! divide field into equal-area rings
+	^fld == sqrtf((^i_fld-1)/(^n_rings-1))*^full_diag_field
+	wri ^fld
+	ins f^i_fld 0 ^fld
+end for
+
+lbl EXIT
+chk no
+ver yes

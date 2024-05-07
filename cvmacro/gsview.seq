@@ -1,0 +1,46 @@
+! View Nth lens from the last GS run.
+! Requires recording CLI to buffer (BUF Y) during optimization
+! and a gallery.seq run afterwards.
+! 
+! [arg1] - index of lens in the gallery, next lens if ommited
+ver no
+chk yes
+
+lcl num ^i_lens ^i_out_buf
+lcl str ^lensname ^symmetry ^celltype
+rfd -1
+
+! constants/settings
+^i_out_buf == 4
+
+^i_lens == #1
+if ^i_lens < 0
+	^i_lens == ^g_i_gs_lens + 1
+	wri Q"Proceeding to lens number 'ddd'..." ^i_lens
+end if
+
+^celltype == (buf.typ b^i_out_buf i^i_lens j1)
+if ^celltype = "UNKNOWN"
+	wri "No more lenses in gallery"
+	goto EXIT
+end if
+^lensname == (buf.str b^i_out_buf i^i_lens j1)
+if ^lensname = ''
+	wri Q"Lens #'ddd' not found in buffer 'd'" ^i_lens ^i_out_buf
+	goto EXIT
+end if
+
+res ^lensname
+^symmetry == (sym)
+if ^symmetry = 'ROT'
+	vie; go
+else
+	in xy
+end if
+!in ray
+
+^g_i_gs_lens == ^i_lens
+
+lbl EXIT
+chk no
+ver yes

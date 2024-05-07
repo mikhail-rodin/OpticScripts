@@ -1,0 +1,45 @@
+ver no
+chk yes
+! bend flip optimization
+
+lcl num ^i_srf ^xcyl_flag ^eps
+lcl num ^c1 ^c2 ^X ^X_scaling 
+
+rfd 0 -1
+^i_srf == #1
+^X_scaling == #2
+^xcyl_flag == -1
+^eps == 1e-6
+
+if ^i_srf = 0
+	wri "please specify first surface of the element"
+	goto EXIT
+end if
+
+^c1 == (cuy s^i_srf)
+^c2 == (cuy s^i_srf+1)
+if (typ sur s^i_srf) = 'CYL' &
+		and absf(^c1) < ^eps and absf(^c2) < ^eps
+	! X cylinder
+	^xcyl_flag == 1
+	^c1 == (cux s^i_srf)
+	^c2 == (cux s^i_srf+1)
+end if
+^X == (^c1+^c2)/(^c1-^c2)
+
+in bend ^i_srf ^X*^X_scaling
+
+if ^xcyl_flag < 0
+	ccy s^i_srf 100 ! freeze
+	ccy s^i_srf+1 100 ! otherwise if will return to the local optimum
+	dra
+else
+	ccx s^i_srf 100 ! freeze
+	ccx s^i_srf+1 100
+	in xz
+end if
+wri "now reoptimize"
+
+lbl EXIT
+chk no
+ver yes

@@ -1,0 +1,23 @@
+! inserts a thick X cylinder
+! arg1 - surface to insert after
+! arg2 - distance from prev. lens
+! [arg3] - element power, 1/mm
+! [arg4] - glasscode, TK21 by default
+ver no
+chk yes
+lcl num ^ins_after ^P
+
+rfd -1 -1 0.01 66.51
+^ins_after == #1 
+if ^ins_after < 0
+	wri "please specify the surface after which the element is inserted"
+	goto EXIT
+end if
+^P == #3
+
+in ins_elt ^ins_after #2 1/^P #4
+in sph2xcyl ^ins_after+1 ^ins_after+2
+
+lbl EXIT
+chk no
+ver yes

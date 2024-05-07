@@ -1,0 +1,447 @@
+!-------------------------------------------------------------
+! __     __                      _____      _     _      _ 
+! \ \   / /                     / ____|    (_)   | |    | |
+!  \ \_/ /   _  __ _ _ __ _____| (___   ___ _  __| | ___| |
+!   \   / | | |/ _` | '_ \______\___ \ / _ \ |/ _` |/ _ \ |
+!    | || |_| | (_| | | | |     ____) |  __/ | (_| |  __/ |
+!    |_| \__,_|\__,_|_| |_|    |_____/ \___|_|\__,_|\___|_|
+!      anamorphic aberration modelling & optimization lib                                                     
+!-------------------------------------------------------------
+! Functions for analysing a system as-is:
+! 	@prescription(out ^cnd(5,100))
+! 	@xy_object(out ^obj(8), ^x_fld, ^y_fld)
+! 	@raytrace(in/out ^rt(100, 8), ^first, ^last)
+!	@Dxx Yuan sums that use real rays
+!	@intermediate_xy_img(^obj(8), ^i_srf, ^s_, ^i_full_x_fld, ^i_full_y_fld)
+!
+! Functions interpreting spheres according to input:
+!	@raytrace(in/out ^rt(100, 8), ^first, ^last, ^scx, ^scy)
+!	@D12rt_equiv(^object(8), ^scx, ^scy)
+!	here ^scx and ^scy are curvature scale factors
+!
+!	* Skew ray aberration are different for spheres, X and Y cylinders.
+!	  Tangential aberrations are the same where they aren't zero.
+!	  Thus skew Dxx_rt aberrations have curvature scale factors
+!	  for reinterpreting surface shapes, but tangential ones do not.
+!
+! Dependencies:
+!	libgeom for @intermediate_xy_obj
+!
+! Assumptions:
+!	1. F1 is axial
+!
+chk y
+
+! ray table spec:
+gbl num ^g_obj(8)
+gbl num ^giMXh ^giMXu ^giMYh ^giMYu ^giPXh ^giPXu ^giPYh ^giPYu
+^giMXh == 1; ^giMXu == 2; ^giMYh == 3; ^giMYu == 4
+^giPXh == 5; ^giPXu == 6; ^giPYh == 7; ^giPYu == 8
+! in a raytable, h and u are given for incident rays. not refracted
+! thus 'object' ray vector applies to the 1st surface, not object
+
+FCT @prescription(num ^cnd(5,100)) ! fills in a prescription table
+! note that CodeV types are thin wrappers over Fortran's 
+! so cnd is column-major (columns are contiguous in RAM and indexing is 1-based by default
+!
+! column is (cx, cy, d, n, v)^T
+	num ^i_surf
+	^cnd(4, 1) == 1; ! n = air	
+	FOR ^i_surf 1 (NUM S)
+		^cnd(1, ^i_surf) == (CUX S^i_surf)
+		^cnd(2, ^i_surf) == (CUY S^i_surf)
+		^cnd(3, ^i_surf) == (THI S^i_surf)	
+		^cnd(4, ^i_surf + 1) == (IND S^i_surf)
+		^cnd(5, ^i_surf) == (ABV S^i_surf)
+	END FOR
+END FCT 0
+
+FCT @prescr_equiv(num ^cnd(5,100), num ^scale_x, num ^scale_y) 
+! interprets a spherical lens as if it was cylindrical
+! data in LDM is unchanged, but aberrations will be calculated
+! for equivalent cylinders
+	num ^i_surf
+	^cnd(4, 1) == 1; ! n = air	
+	FOR ^i_surf 1 (NUM S)
+		^cnd(1, ^i_surf) == (CUX S^i_surf)*^scale_x
+		^cnd(2, ^i_surf) == (CUY S^i_surf)*^scale_y
+		^cnd(3, ^i_surf) == (THI S^i_surf)	
+		^cnd(4, ^i_surf + 1) == (IND S^i_surf)
+		^cnd(5, ^i_surf) == (ABV S^i_surf)
+	END FOR
+END FCT 0
+
+FCT @xy_object(num ^obj(8), num ^x_fld, num ^y_fld)
+! paraxial rays from the object
+! assumes stop is in front, thus not astigmatic
+	num ^pi ^D ^sP ^u_x ^u_y ^eps
+	^pi == 3.14159265358979323846264338328
+	^eps == 1e-3
+	
+	! marginal
+	^D == (EPD)
+	^obj(1) == ^D*0.5            ! XM.h
+	^obj(2) == 0                 ! XM.u
+	^obj(3) == ^D*0.5            ! YM.h
+	^obj(4) == 0                 ! YM.u
+	
+	! principal
+	if (enp) < ^eps and (sto) = 1 and (ind s1) < 1.1
+		! there's a physical stop
+		^sP == (thi s1)
+	else
+		^sP == (ENP)
+	end if
+	^u_x == tanf(absf(^x_fld*^pi/180))
+	^u_y == tanf(absf(^y_fld*^pi/180))
+	^obj(5) == -^sP * ^u_x      ! XP.h
+	^obj(6) == ^u_x             ! XP.u
+	^obj(7) == -^sP * ^u_y      ! YP.h
+	^obj(8) == ^u_y             ! YP.u
+END FCT 0
+
+FCT @intermediate_xy_obj(num ^obj(8), num ^i_srf, num ^s_, num ^i_full_x, num ^i_full_y)
+! paraxial Lange rays corresponding to an intermediate image
+! out ^obj(8) 
+! arg ^i_srf - index of surface after which an intermediate image is analysed
+! arg ^s_ - distance from S^i_srf to the plane for which Lange rays are calculated
+! arg ^i_full_x - index of full tangential X field (x_max, 0)
+! arg ^i_full_y - index of full tangential Y field (0, y_max)
+! 		- NB: these aren't the same as the full skew field (x_max, y_max)
+
+	num ^pi ^sPx ^sPy ^u_x ^u_y ^upx ^upy
+	^pi == 3.14159265358979323846264338328
+
+	! marginal
+	^obj(1) == 0.5*@local_expd_x_after(^i_full_x, ^i_srf)  ! XM.h
+	^obj(2) == (L r4 s^i_srf f1)/(N r4 s^i_srf f1)         ! XM.u
+	^obj(3) == 0.5*@local_expd_y_after(^i_full_y, ^i_srf)  ! YM.h
+	^obj(4) == (M r2 s^i_srf f1)/(N r2 s^i_srf f1)         ! YM.u
+	
+	! principal
+	^sPx == @local_expp_x_after(^i_full_x, ^i_srf) - ^s_
+	^sPy == @local_expp_y_after(^i_full_y, ^i_srf) - ^s_
+	
+	^upx == (L r1 s^i_srf f^i_full_x)/(N r1 s^i_srf f^i_full_x)
+	^upy == (M r1 s^i_srf f^i_full_y)/(N r1 s^i_srf f^i_full_y)
+	
+	^obj(5) == -^sPx * ^upx      ! XP.h
+	^obj(6) == ^upx             ! XP.u
+	^obj(7) == -^sPx * ^upy      ! YP.h
+	^obj(8) == ^upy             ! YP.u
+END FCT 0
+
+FCT @raytrace(num ^rt(100, 8), num ^first, num ^last)
+! paraxial raytrace done as if spheres were actually X cylinders
+! user ray table spec from xy_object
+! rt(1,:) must contain an object spec (incident rays for first surface
+	num ^i_srf ^i ^n ^n_ ^n12 ^d ^cx ^cy ^j
+	
+	^i == 1 ! raytable surface counter
+	^n == (ind s^first-1)
+	for ^i_srf ^first ^last
+		! current surface optical power...
+		^cx == (cux s^i_srf)
+		^cy == (cuy s^i_srf)
+		^d == (thi s^i_srf)
+		^n_ == (ind s^i_srf)
+		^n12 == ^n/^n_
+		! ...bends the rays that land at the next surface
+		! - we're filling the table with INCIDENT rays
+		^rt(^i+1,^giMXu) == ^rt(^i,^giMXu)*^n12 - ^rt(^i,^giMXh)*^cx*(1-^n12)
+		^rt(^i+1,^giMXh) == ^rt(^i,^giMXh) + ^rt(^i+1,^giMXu)*^d
+
+		^rt(^i+1,^giMYu) == ^rt(^i,^giMYu)*^n12 - ^rt(^i,^giMYh)*^cy*(1-^n12)
+		^rt(^i+1,^giMYh) == ^rt(^i,^giMYh) + ^rt(^i+1,^giMYu)*^d
+		
+		^rt(^i+1,^giPXu) == ^rt(^i,^giPXu)*^n12 - ^rt(^i,^giPXh)*^cx*(1-^n12)
+		^rt(^i+1,^giPXh) == ^rt(^i,^giPXh) + ^rt(^i+1,^giPXu)*^d
+		
+		^rt(^i+1,^giPYu) == ^rt(^i,^giPYu)*^n12 - ^rt(^i,^giPYh)*^cy*(1-^n12)
+		^rt(^i+1,^giPYh) == ^rt(^i,^giPYh) + ^rt(^i+1,^giPYu)*^d
+		
+		^i == ^i + 1
+		^n == ^n_
+	end for
+END FCT 0
+
+FCT @raytrace_equiv(num ^rt(100, 8), num ^first, num ^last, num ^scx, num ^scy)
+! paraxial raytrace 
+! X and Y curvatures can be independently scaled 
+! so that a sphere can be reinterpreted as an X or Y cylinder
+! first row of ^rt is an object
+	num ^i_srf ^i ^n ^n_ ^n12 ^d ^cx ^cy ^j
+	
+	^i == 1 ! raytable surface counter
+	^n == (ind s^first-1)
+	for ^i_srf ^first ^last
+		! current surface optical power...
+		^cx == (cux s^i_srf)*^scx
+		^cy == (cuy s^i_srf)*^scy
+		^d == (thi s^i_srf)
+		^n_ == (ind s^i_srf)
+		^n12 == ^n/^n_
+		! ...bends the rays that land at the next surface
+		! - we're filling the table with INCIDENT rays
+		^rt(^i+1,^giMXu) == ^rt(^i,^giMXu)*^n12 - ^rt(^i,^giMXh)*^cx*(1-^n12)
+		^rt(^i+1,^giMXh) == ^rt(^i,^giMXh) + ^rt(^i+1,^giMXu)*^d
+
+		^rt(^i+1,^giMYu) == ^rt(^i,^giMYu)*^n12 - ^rt(^i,^giMYh)*^cy*(1-^n12)
+		^rt(^i+1,^giMYh) == ^rt(^i,^giMYh) + ^rt(^i+1,^giMYu)*^d
+		
+		^rt(^i+1,^giPXu) == ^rt(^i,^giPXu)*^n12 - ^rt(^i,^giPXh)*^cx*(1-^n12)
+		^rt(^i+1,^giPXh) == ^rt(^i,^giPXh) + ^rt(^i+1,^giPXu)*^d
+		
+		^rt(^i+1,^giPYu) == ^rt(^i,^giPYu)*^n12 - ^rt(^i,^giPYh)*^cy*(1-^n12)
+		^rt(^i+1,^giPYh) == ^rt(^i,^giPYh) + ^rt(^i+1,^giPYu)*^d
+		
+		^i == ^i + 1
+		^n == ^n_
+	end for
+END FCT 0
+
+FCT @D4rt(num ^object(8))
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_umx_n ^sum ^AMx ^ACx ^n ^n_ ^cx
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace(^rt, 1, (num s))
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^n_ == (ind S^i_srf)
+		^cx == (cux S^i_srf)
+		
+		^AMx == ^n*(^rt(^i_srf,^giMXu) + ^rt(^i_srf,^giMXh)*^cx) ! n index is before surface
+		^ACx == ^n*(^rt(^i_srf,^giPXu) + ^rt(^i_srf,^giPXh)*^cx) ! n index is before surface
+		
+		^d_umx_n == ^rt(^i_srf+1,^giMXu)/^n_ - ^rt(^i_srf,^giMXu)/^n
+		
+		^sum == ^sum + ^AMx*^ACx*^rt(^i_srf,^giMXh)*^d_umx_n
+		
+		^n == ^n_
+	end for
+END FCT -0.5*^sum
+
+FCT @D7rt(num ^object(8))
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_umy_n ^sum ^AMy ^ACy ^n ^n_ ^cy
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace(^rt, 1, (num s))
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^n_ == (ind S^i_srf)
+		^cy == (cuy S^i_srf)
+		
+		^AMy == ^n*(^rt(^i_srf,^giMYu) + ^rt(^i_srf,^giMYh)*^cy) ! n index is before surface
+		^ACy == ^n*(^rt(^i_srf,^giPYu) + ^rt(^i_srf,^giPYh)*^cy) ! n index is before surface
+		
+		^d_umy_n == ^rt(^i_srf+1,^giMYu)/^n_ - ^rt(^i_srf,^giMYu)/^n
+		
+		^sum == ^sum + ^AMy*^ACy*^rt(^i_srf,^giMYh)*^d_umy_n
+		
+		^n == ^n_
+	end for
+END FCT -0.5*^sum
+
+FCT @D8rt(num ^object(8))
+	! tangential X curvature
+	! not a skew ray aberration thus curvature scaling has no effect
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_umx_n ^sum ^AMx ^ACx ^LinvX ^Px ^n ^n_ ^cx 
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace(^rt, 1, (num s))
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^n_ == (ind S^i_srf)
+		^cx == (cux S^i_srf)
+		
+		^AMx == ^n*(^rt(^i_srf,^giMXu) + ^rt(^i_srf,^giMXh)*^cx) ! n index is before surface
+		^ACx == ^n*(^rt(^i_srf,^giPXu) + ^rt(^i_srf,^giPXh)*^cx) ! n index is before surface
+		^LinvX == ^AMx*^rt(^i_srf,^giPXh) - ^ACx*^rt(^i_srf,^giMXh)
+		^Px == ^cx*(1/^n_ - 1/^n)
+		
+		^d_umx_n == ^rt(^i_srf+1,^giMXu)/^n_ - ^rt(^i_srf,^giMXu)/^n
+		
+		^sum == ^sum + 3*^ACx*^ACx*^rt(^i_srf,^giMXh)*^d_umx_n
+		^sum == ^sum + ^LinvX*^LinvX*^Px
+		
+		^n == ^n_
+	end for
+END FCT -0.25*^sum
+
+FCT @D9rt(num ^object(8))
+	! tangential Y curvature
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_umy_n ^sum ^AMy ^ACy ^LinvY ^Py ^n ^n_ ^cy 
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace(^rt, 1, (num s))
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^n_ == (ind S^i_srf)
+		^cy == (cuy S^i_srf)
+		
+		^AMy == ^n*(^rt(^i_srf,^giMYu) + ^rt(^i_srf,^giMYh)*^cy) ! n index is before surface
+		^ACy == ^n*(^rt(^i_srf,^giPYu) + ^rt(^i_srf,^giPYh)*^cy) ! n index is before surface
+		^LinvY == ^AMy*^rt(^i_srf,^giPYh) - ^ACy*^rt(^i_srf,^giMYh)
+		^Py == ^cy*(1/^n_ - 1/^n)
+		
+		^d_umy_n == ^rt(^i_srf+1,^giMYu)/^n_ - ^rt(^i_srf,^giMYu)/^n
+		
+		^sum == ^sum + 3*^ACy*^ACy*^rt(^i_srf,^giMYh)*^d_umy_n
+		^sum == ^sum + ^LinvY*^LinvY*^Py
+		
+		^n == ^n_
+	end for
+END FCT -0.25*^sum
+	
+FCT @D10rt_equiv(num ^object(8), num ^scx, num ^scy)
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_umx ^d_ucy2 ^sum ^Ax ^n ^cx ^cy
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace_equiv(^rt, 1, (num s), ^scx, ^scy)
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^cx == (cux S^i_srf)*^scx
+		^cy == (cuy S^i_srf)*^scy
+		^d_umx == ^rt(^i_srf+1,^giMXu)-^rt(^i_srf,^giMXu)
+		^d_ucy2 == ^rt(^i_srf+1,^giPYu)**2 - ^rt(^i_srf,^giPYu)**2
+		
+		^Ax == ^n*(^rt(^i_srf,^giMXu) + ^rt(^i_srf,^giMXh)*^cx) ! n index is before surface
+		^sum == ^sum + ^Ax*(^rt(^i_srf,^giMXh)*^d_ucy2 + ^rt(^i_srf,^giPYh)**2*^cy*^d_umx)
+		
+		^n == (ind S^i_srf)
+	end for
+END FCT -0.25*^sum
+
+FCT @D11
+	! requires last field to be full skew field
+	num ^i_srf ^sum ^n
+	num ^hmy ^hcx ^cx ^cy ^umy ^umy_ ^ucx ^ucx_ 
+	num ^d_ucx2 ^d_umy ^Ay
+	^sum == 0
+	^umy == (M SO R2 F1)/(N SO R2 F1)
+	^ucx == (L SO R1 FL)/(N SO R1 FL)
+	^n == 1
+	for ^i_srf 1 (num s)
+		^umy_ == (M S^i_srf R2 F1)/(N S^i_srf R2 F1)
+		^d_umy == ^umy_ - ^umy
+		
+		^ucx_ == (L S^i_srf R1 FL)/(N S^i_srf R1 FL)
+		^d_ucx2 == ^ucx_**2 - ^ucx**2
+		
+		^hmy == (Y S^i_srf F1 R2)
+		^hcx == (X S^i_srf R1 FL)
+		^Ay == ^n*(^umy + ^hmy*(cuy S^i_srf)) ! n index is before surface
+		^sum == ^sum + ^Ay*(^hmy*^d_ucx2 + ^hcx**2*(cux S^i_srf)*^d_umy)
+		
+		^umy == ^umy_ ! for next surface
+		^ucx == ^ucx_
+		^n == (ind S^i_srf)
+	end for
+END FCT -0.25*^sum
+
+FCT @D11rt_equiv(num ^object(8), num ^scx, num ^scy)
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_umy ^d_ucx2 ^sum ^Ay ^n ^cx ^cy
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace_equiv(^rt, 1, (num s), ^scx, ^scy)
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^cx == (cux S^i_srf)*^scx
+		^cy == (cuy S^i_srf)*^scy
+		^d_umy == ^rt(^i_srf+1,^giMYu)-^rt(^i_srf,^giMYu)
+		^d_ucx2 == ^rt(^i_srf+1,^giPXu)**2 - ^rt(^i_srf,^giPXu)**2
+		
+		^Ay == ^n*(^rt(^i_srf,^giMYu) + ^rt(^i_srf,^giMYh)*^cy) ! n index is before surface
+		^sum == ^sum + ^Ay*(^rt(^i_srf,^giMYh)*^d_ucx2 + ^rt(^i_srf,^giPXh)**2*^cx*^d_umy)
+		
+		^n == (ind S^i_srf)
+	end for
+END FCT -0.25*^sum
+
+FCT @D12
+	! requires last field to be full skew field
+	num ^i_srf ^sum ^n
+	num ^hmx ^hmy ^hcx ^hcy ^cx ^cy ^AMy ^ACy
+	num ^umx ^umx_ ^umy ^umy_ ^ucx ^ucx_ ^ucy ^ucy_
+	num ^d_ucx_umx ^d_ucy
+	^sum == 0
+	^umx == (L SO R2 F1)/(N SO R2 F1)
+	^umy == (M SO R2 F1)/(N SO R2 F1)
+	^ucx == (L SO R1 FL)/(N SO R1 FL)
+	^ucy == (M SO R1 FL)/(N SO R1 FL)
+	^n == 1
+	for ^i_srf 1 (num s)
+		^umx_ == (L S^i_srf R2 F1)/(N S^i_srf R2 F1)
+		^ucx_ == (L S^i_srf R1 FL)/(N S^i_srf R1 FL)
+		^d_ucx_umx == ^ucx_*^umx_ - ^ucx*^umx
+		^ucy_ == (M S^i_srf R1 FL)/(N S^i_srf R1 FL)
+		^d_ucy == ^ucy_ - ^ucy
+		
+		^hmy == (Y S^i_srf F1 R2)
+		^hmx == (X S^i_srf F1 R2)
+		^hcx == (X S^i_srf R1 FL)
+		^hcy == (Y S^i_srf R1 FL)
+		^cy == (cuy S^i_srf)
+		^AMy == ^n*(^umy + ^hmy*^cy) ! n index is before surface
+		^ACy == ^n*(^ucy + ^hcy*^cy)
+		^sum == ^sum + ^ACy*^hmy*^d_ucx_umx + ^AMy*^hmx*^hcx*^cx*^d_ucy
+		
+		^umx == ^umx_ ! for next surface
+		^ucx == ^ucx_
+		^ucy == ^ucy_
+		^n == (ind S^i_srf)
+	end for
+END FCT -^sum
+
+FCT @D12rt_equiv(num ^object(8), num ^scx, num ^scy)
+	num ^rt(100,8) ^errcode ^i ^i_srf
+	num ^d_ucy ^d_ucx_umx ^sum ^AMy ^ACy ^cy ^cx ^n
+	for ^i 1 8 
+		^rt(1,^i) == ^object(^i)
+	end for
+	^errcode == @raytrace_equiv(^rt, 1, (num s), ^scx, ^scy)
+	
+	^sum == 0
+	^n == 1
+	for ^i_srf 1 (num s)
+		^cx == (cux S^i_srf)*^scx
+		^cy == (cuy S^i_srf)*^scy
+	
+		^d_ucy == ^rt(^i_srf+1,^giPYu)-^rt(^i_srf,^giPYu)
+		^d_ucx_umx == ^rt(^i_srf+1,^giPXu)*^rt(^i_srf+1,^giMXu) - ^rt(^i_srf,^giPXu)*^rt(^i_srf,^giMXu)
+		
+		^AMy == ^n*(^rt(^i_srf,^giMYu) + ^rt(^i_srf,^giMYh)*^cy) ! n index is before surface
+		^ACy == ^n*(^rt(^i_srf,^giPYu) + ^rt(^i_srf,^giPYh)*^cy) ! n index is before surface
+		
+		^sum == ^sum + ^ACy*^rt(^i_srf,^giMYh)*^d_ucx_umx
+		^sum == ^sum + ^AMy*^rt(^i_srf,^giPXh)*^rt(^i_srf,^giMXh)*^cx*^d_ucy
+		
+		^n == (ind S^i_srf)
+	end for
+END FCT -^sum
+
+chk no

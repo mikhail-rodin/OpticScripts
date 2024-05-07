@@ -1,0 +1,18 @@
+! arg1 - index of surface
+! arg2 - surface displacement
+
+chk yes
+lcl num ^i_srf ^delta_d ^d_left ^d_right
+^i_srf == #1
+^delta_d == #2
+
+^d_left == (thi s^i_srf-1)
+^d_right == (thi s^i_srf)
+
+thi s^i_srf-1 ^d_left+^delta_d
+thi s^i_srf ^d_right-^delta_d
+
+vie
+go
+
+chk no
