@@ -192,11 +192,11 @@ for ^i_zoom 1 (num z)
 			wri "Finite conjugates. f' = " (efl z^i_zoom)		
 		else
 			^d_airy == ^u_airy*(efl z^i_zoom)*1e3 ! in um, assumes millimeters
-			^hline ==       "+-----------+-------------------------+"
-			^format ==      "|'dd.d'  'dd.d' |'dddddd.d'    'dddd'    'd.dd' |"
-			^airy_format == "|    Airy   |'dddddd.d'    'dddd'    'd.dd' |"
-			^main_header == "|   Field   |    Image space          |"
-			^unit_header == "|  X     Y  |   uM     cyc/mm  @  mod |"
+			^hline ==       "+-----------+-------------------------+-----------+"
+			^format ==      "|'dd.d'  'dd.d' |'dddddd.d'    'dddd'    'd.dd' | 'dd.d' 'dd.d' |"
+			^airy_format == "|    Airy   |'dddddd.d'    'dddd'    'd.dd' |           |"
+			^main_header == "|   Field   |    Image space          | Dist., %  |"
+			^unit_header == "|  X     Y  |   uM     cyc/mm  @  mod |   X    Y  |"
 			wri "Focal lens. f' = " (efl z^i_zoom)
 		end if
 	end if
@@ -276,7 +276,8 @@ for ^i_zoom 1 (num z)
 			^mtf == ^mtfdata(1)
 			^diflimit == ^mtfdata(4) 
 			
-			wri Q^format (xan f^i_fld z^i_zoom) (yan f^i_fld z^i_zoom) ^d_spot 1000/^d_spot ^mtf
+			wri Q^format (xan f^i_fld z^i_zoom) (yan f^i_fld z^i_zoom) &
+				^d_spot 1000/^d_spot ^mtf 100*(dix f^i_fld z^i_zoom) 100*(diy f^i_fld z^i_zoom) 
 	
 		end if
 		

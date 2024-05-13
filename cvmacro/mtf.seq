@@ -1,0 +1,156 @@
+! MTF analysis! [arg1] - zoom pos
+! [arg2] - contrast
+ver no
+chk yes
+
+lcl num ^i_zoom ^i_fld ^i_tbl ^i_first_tbl ^i_last_tbl ^n_tables
+lcl num ^Hx(16) ^Hy(16) ^fldx(16) ^fldy(16)
+lcl num ^diflimitT(16) ^diflimitR(16)
+lcl num ^row ^col ^r_tbl_start ^r_tbl_end ^tbl_len ^firstrow ^lastrow ^i_r ! buffer
+lcl num ^mtf1T ^mtf1R ^mtf2T ^mtf2R ^f1 ^f2 ! for interpolation
+lcl str ^fmt_hline ^fmt_header ^fmt_subheader ^fmt ^cell
+lcl num ^i_cmod ^n_cmods ^cmod(8) ! criterion modulation values
+lcl num ^freqR(8, 16) ^freqT(8, 16) ! frequency the crit mod is achieved at
+lcl num ^contrast
+
+rfd -1 0.5
+^i_zoom == #1
+^contrast == #2
+if ^i_zoom < 0
+	^i_zoom == 1
+	if (num z) > 1
+		wri "Usage: in mtf zoom_pos"
+		goto EXIT
+	end if
+end if
+!^i_first_tbl== (^i_zoom - 1)*(num f) + 1
+^i_first_tbl == 1
+!^i_last_tbl == ^i_first_tbl+ (num f) - 1
+^i_last_tbl == (num f)
+if ^contrast < 0 or ^contrast > 1
+	wri "Modulation must be in [0; 1] range"
+	goto EXIT
+end if
+
+^cmod(1) == 0.2
+^cmod(2) == 0.3
+^n_cmods == 2
+
+!--------------------------------------------------------------------------
+! MTF evaluation
+buf del b0
+buf yes
+pos z^i_zoom onl y
+mtf
+! dia yes ! 45 and 135 deg targers
+go
+pos za y
+buf n
+
+!--------------------------------------------------------------------------
+! parsing of Code V output
+^firstrow == 1
+^lastrow == (buf.lst b0)
+
+^n_tables == 0
+^tbl_len == 0
+buf fnd b0 i^firstrow..^lastrow "RELATIVE ILLUMINATION"
+for ^i_tbl 1 100 ! not a while-loop to avoid freezes 
+	if (buf.fnd) ! last search successful
+		^n_tables == ^n_tables + 1
+		^row == (buf.i b0)-1
+		^col == (buf.j b0)
+		buf prs i^row "'20c' 'd.dd', 'd.dd'(MAX, ( 'dd.dd' 'dd.dd' '40c'"
+		^Hx(^i_tbl) == (buf.num b0 i^row j2)
+		^Hy(^i_tbl) == (buf.num b0 i^row j3)
+		^fldx(^i_tbl) == (buf.num b0 i^row j4)
+		^fldy(^i_tbl) == (buf.num b0 i^row j5)
+		^r_tbl_start == ^row + 10
+		if ^n_tables = 1
+			^r_tbl_end == ^r_tbl_start + 1000 ! default
+		else
+			^r_tbl_end == ^r_tbl_start + ^tbl_len - 1
+		end if
+		for ^i_r ^r_tbl_start ^r_tbl_end
+			if (buf.col b0 i^i_r+1) >= 4
+				if ^n_tables = 1
+					! in the 1st table, we count lines
+					^tbl_len == ^tbl_len + 1
+				end if
+				^f1 == (buf.num b0 i^i_r j1)
+				^f2 == (buf.num b0 i^i_r+1 j1)
+				if (absf(^Hx(^i_tbl)) < 1e-4) and (absf(^Hy(^i_tbl)) < 1e-4)
+					! axial MTF
+					^mtf1R == (buf.num b0 i^i_r j4)
+					^mtf1T == ^mtf1R
+					^mtf2R == (buf.num b0 i^i_r+1 j4)			
+					^mtf2T == ^mtf2R
+				else
+					! off-axis MTF
+					^mtf1R == (buf.num b0 i^i_r j5)
+					^mtf2R == (buf.num b0 i^i_r+1 j5)
+					^mtf1T == (buf.num b0 i^i_r j6)
+					^mtf2T == (buf.num b0 i^i_r+1 j6)
+				end if
+				for ^i_cmod 1 ^n_cmods ! for each criteriion contrast value
+					if absf(^mtf1T-^cmod(^i_cmod)) < 0.001
+						! dbg: wri Q"f'd' match 'd.dd'='d.dd'" ^i_tbl ^mtf1T ^cmod(^i_cmod)
+						^freqT(^i_cmod, ^i_tbl) == ^f1
+						!^diflimitT(^i_tbl)
+					else if (^cmod(^i_cmod) < ^mtf1T) and (^cmod(^i_cmod) > ^mtf2T)
+						! we're in the middle, gotta interpolate
+						! dbg: wri Q"f'd' interpolate ['d.ddd'; 'd.ddd']" ^i_tbl ^mtf1T ^mtf2T
+						^freqT(^i_cmod, ^i_tbl) == &
+							@interpolate_linear(^mtf1T, ^mtf2T, ^f1, ^f2, ^cmod(^i_cmod))
+					end if
+					
+					if absf(^mtf1R-^cmod(^i_cmod)) < 0.001
+						! dbg: wri Q"f'd' match 'd.dd'='d.dd'" ^i_tbl ^mtf1R ^cmod(^i_cmod)
+						^freqR(^i_cmod, ^i_tbl) == ^f1
+					else if ((^cmod(^i_cmod) < ^mtf1R) and (^cmod(^i_cmod) > ^mtf2R))
+						! we're in the middle, gotta interpolate
+						! dbg: wri Q"f'd' interpolate ['d.ddd'; 'd.ddd']" ^i_tbl ^mtf1R ^mtf2R
+						^freqR(^i_cmod, ^i_tbl) == &
+							@interpolate_linear(^mtf1R, ^mtf2R, ^f1, ^f2, ^cmod(^i_cmod))
+					end if
+				end for
+			else
+				goto END_PARSE_FREQS
+			end if
+		end for
+		lbl END_PARSE_FREQS
+		buf fnd fwd ! search for next entry
+	else 
+		goto MTF_PARSE_EXIT
+	end if
+end for
+lbl MTF_PARSE_EXIT
+if ^n_tables <> (num f)
+	wri Q"ERROR: 'dd' tables processed =/= 'dd' fields" &
+		^n_tables (num f)
+	goto EXIT
+end if
+
+!--------------------------------------------------------------------------
+! print out
+^fmt_hline     == "+------------+--------------+--------------+----------+"
+^fmt_header    == "|    Field   |   MTF = 'd.dd' |   MTF = 'd.dd' | Dist., % |"
+^fmt_subheader == "|   X     Y  |  tang   rad  |  tang   rad  |  X    Y  |"  
+^fmt == "|'ddd.d' 'ddd.d' |'dddd.d' 'dddd.d' |'dddd.d' 'dddd.d' |'dd.d' 'dd.d' |"
+
+wri ^fmt_hline
+wri Q^fmt_header ^cmod(1) ^cmod(2)
+wri ^fmt_subheader
+wri ^fmt_hline
+for ^i_tbl ^i_first_tbl ^i_last_tbl
+	^i_fld == ^i_tbl - ^i_first_tbl + 1
+	wri Q^fmt ^fldx(^i_tbl) ^fldy(^i_tbl) &
+		^freqT(1, ^i_tbl) ^freqR(1, ^i_tbl) &
+		^freqT(2, ^i_tbl) ^freqR(2, ^i_tbl) &
+		100*(dix z^i_zoom f^i_fld) 100*(diy z^i_zoom f^i_fld)
+end for
+wri ^fmt_hline
+
+lbl EXIT
+chk no
+ver yes

@@ -1,35 +1,122 @@
-! arg0 "Restore lens from .seq"
-! arg0 "Sets title so that store.seq can be used"
-!
-! arg1 name "path"
-! arg1 type str
-! arg1 default "cv_macro:cvnewlens"
-!rfd "cv_macro:cvnewlens"
 ver no
+! [arg1] - filename
+!   * if provided, loads a lens
+!   * if not, lists lenses in dir and asks which to load
 chk y
-lcl str ^name ^path ^title
-lcl num ^name_len
+lcl str ^name ^path ^title ^response
+lcl num ^name_len ^row_start ^row ^i_lens ^n_lenses
+lcl str ^filename1 ^filename2 ! for printing 2 columns
+lcl str ^fmt_2col ^fmt_1col ^fmt_hline
+lcl num ^i_delim ^input
+lcl num ^erf1 ^erf2
 
 rfd ''
 ^name == #1
 ^name_len == lenstr(^name)
-if ^name_len = 0
+if ^name = ''
 	! no args
-	wri "no filepath provided in args or stored in (tit) DB item"
-	goto EXIT
+	buf del b0
+	out no
+	buf yes
+	lib
+		dir *.len
+	can
+	out yes
+	buf no
+	buf fnd b0 i1..6 "No files found"
+	if (buf.fnd)
+		wri "No .LEN files in " (cd)
+		goto EXIT
+	end if
+	buf fnd b0 i1..6 "FILES IN DIRECTORY"
+	if (buf.fnd) ! last search successful
+		^row_start == (buf.i) + 3
+		^n_lenses == 0
+		for ^row ^row_start ^row_start+1000
+			if ^row <= (buf.lst b0)
+				if (buf.col i^row) < 4
+					goto PARSE_END
+				else 
+					^n_lenses == ^n_lenses + 1
+				end if
+			else
+				goto PARSE_END
+			end if 
+		end for
+		lbl PARSE_END
+	end if
+	
+	^fmt_hline == "+---------------------------------------------------------------------------+"
+	^fmt_2col == "|'ddd' '20c' '6g.4g' |'ddd' '20c' '6g.4g' |"
+	^fmt_1col == "|'ddd' '58c' '6g.4g' |"
+	
+	wri ^fmt_hline
+	for ^i_lens 1 ^n_lenses 2
+		^row == ^row_start + ^i_lens - 1
+		^filename1 == (buf.str i^row j1)
+		^i_delim == locstr(^filename1, ' ')
+		^filename1 == substr(^filename1, 1, ^i_delim-1)
+		if (buf.typ i^row j4) = 'NUM'
+			^erf1 == (buf.num i^row j4)
+		else
+			^erf1 == -1
+		end if
+		if ^n_lenses > 1 and ^i_lens < ^n_lenses ! not the only nor the last
+			^filename2 == (buf.str i^row+1 j1)
+			^i_delim == locstr(^filename2, ' ')
+			^filename2 == substr(^filename2, 1, ^i_delim-1)
+			if (buf.typ i^row+1 j4) = 'NUM'
+				^erf2 == (buf.num i^row+1 j4)
+			else
+				^erf2 == -1
+			end if
+			if lenstr(^filename1) > 20 or lenstr(^filename2) > 20
+				wri Q^fmt_1col ^i_lens ^filename1 ^erf1
+				wri Q^fmt_1col ^i_lens+1 ^filename2 ^erf2
+			else ! 2 columns
+				wri Q^fmt_2col ^i_lens ^filename1 ^erf1 ^i_lens+1 ^filename2 ^erf2
+			end if
+		else
+			wri Q^fmt_1col ^i_lens ^filename1 ^erf1
+		end if
+	end for
+	wri ^fmt_hline
+	
+	rpr "Load lens.. (index) >"
+	rea Q"'dddd'" ^input
+	rpr
+	if ^input >= 1 and ^input <= ^n_lenses
+		^row == ^row_start + ^input - 1
+		^name == (buf.str i^row j1)
+		^i_delim == locstr(^name, ' ')
+		^name == substr(^name, 1, ^i_delim-1)
+		wri "Load '30c'?" ^name
+		wri "There might be unsaved changes to current lens"
+		rpr "(y/cancel) >"
+		rea Q"'c'" ^response
+		rpr
+		if upcase(^response) <> 'Y'
+			wri "No lens loaded"
+			goto EXIT
+		end if
+	else
+		wri Q"Index not in 1..'ddd' range, no lens loaded." ^n_lenses
+		goto EXIT
+	end if
 else
 	if locstr(^name, '.') = ^name_len - 3 ! if there's an extension
 		^name == substr(^name, 1, ^name_len-4) ! remove extension
 	end if
-	^path == concat(^name, '.seq')
 end if
 
+^path == concat(^name, '.seq')
 wri ^name
 in ^path
 tit ^name
 
 lbl EXIT
-vie
-go
+out no
+vie; go
+out yes
 chk no
 ver yes

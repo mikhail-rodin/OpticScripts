@@ -17,6 +17,12 @@ FCT @heaviside(num ^x)
 	end if
 END FCT ^y
 
+fct @interpolate_linear(num ^x1, num ^x2, num ^y1, num ^y2, num ^x)
+	num ^x_rel ^y
+	^x_rel == (^x - ^x1)/(^x2 - ^x1)
+	^y == ^y1 + (^y2 - ^y1)*^x_rel
+end fct ^y
+
 fct @erf_opgt(num ^x, num ^x_min)
 	num ^erf
 	if ^x > ^x_min
