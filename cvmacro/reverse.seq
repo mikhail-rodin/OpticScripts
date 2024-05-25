@@ -1,0 +1,161 @@
+! Reverse the whole lens, or surfaces sf..sl (inclusive)
+! Usage: in reverse [sf] [sl]
+ver no
+! Dependencies: libgeom
+! Accounts for image/object surface curvature
+chk yes
+
+lcl num ^i_sf ^i_sl ^i_fld ^n_fields
+lcl num ^fields_x_old(16) ^fields_x_new(16)
+lcl num ^fields_y_old(16) ^fields_y_new(16)
+lcl num ^u_x_ ^u_y_ ! imspace ray slopes
+lcl num ^new_R ^new_R_ ! obj/img radius curvature
+lcl num ^conjtype ^new_s ^new_s_ ! conjugates
+lcl num ^f_ ^D ^D_ ^new_EPD ^new_NA ! aperture data 
+lcl str ^response 
+lcl str ^fmt_header ^fmt_subheader ^fmt ^fmt_hline
+lcl str ^field_dbitem_new_x ^field_dbitem_new_y ^aperture_dbitem
+lcl str ^cmd_afocal
+lcl num ^pi
+
+rfd -1 -1
+^i_sf == #1
+^i_sl == #2
+^conjtype == @conj_type	
+^pi == 4*atanf(1)
+
+if ^i_sf < 0 or ^i_sl < 0
+! full system reverse => fields and pupils are dealt with
+	wri "Usage: in reverse [first s incl.] [last s incl.]"
+	wri "Surface range not provided, attempting to reverse the full system..."
+	wri
+
+	^i_sf == 1
+	^i_sl == @i_last_srf
+	
+	^fmt_header    == "| '18c' -> '18c'|"
+	^fmt_subheader == "|     X         Y    |     X         Y    |"
+	^fmt_hline     == "+--------------------+--------------------+"
+	^fmt == "|'4g.4g' '4g.4g' |'4g.4g' '4g.4g' |"
+	
+	^n_fields == (num f)
+	^D == (epd)
+	^D_ == @expd_y(1)
+	^f_ == (efy s^i_sf..^i_sl)
+	if ^conjtype = 10 ! collimator->lens
+		^new_s == 1e18
+		^new_s_ == (thi so)
+		^new_R == 1e18
+		^new_R_ == -(rdy so)
+		^new_EPD == ^D_
+		^field_dbitem_new_x == 'xan'
+		^field_dbitem_new_y == 'yan'
+		wri "You are reversing a collimator and getting a focal lens."
+		wri Q"F/# is 'dd.dd'" ^f_/^D_
+		wri "Field conversions:"
+		wri ^fmt_hline
+		wri Q^fmt_header "  mm object height" "deg field angle"
+		wri ^fmt_subheader
+		wri ^fmt_hline
+		for ^i_fld 1 ^n_fields
+			^fields_x_old(^i_fld) == (xob f^i_fld)
+			^fields_y_old(^i_fld) == (yob f^i_fld)
+			^u_x_ == (l r1 f^i_fld)/(n r1 f^i_fld)
+			^u_y_ == (m r1 f^i_fld)/(n r1 f^i_fld)
+			^fields_x_new(^i_fld) == atanf(^u_x_)*180/^pi
+			^fields_y_new(^i_fld) == atanf(^u_y_)*180/^pi
+			wri Q^fmt ^fields_x_old(^i_fld) ^fields_y_old(^i_fld) &
+				^fields_x_new(^i_fld) ^fields_y_new(^i_fld)
+		end for
+		wri ^fmt_hline
+	else if ^conjtype = 1 ! lens->collimator
+		^new_s == (thi si-1) + (thi si) ! incl defocus
+		^new_s_ == 30 ! you can't have s'=inf in an afocal lens:
+		! - the chief ray won't trace
+		^new_R == -(rdy si)
+		^new_R_ == 1e18
+		^new_NA == sinf(atanf(0.5*^D/^f_))
+		^field_dbitem_new_x == 'xob'
+		^field_dbitem_new_y == 'yob'
+		^cmd_afocal == 'afc y'
+		wri "You are reversing a lens and getting a collimator."
+		wri Q"F/# = 'dd.dd' => NA = 'd.ddd'" ^f_/^D ^new_NA
+		wri "Field conversions:"
+		wri ^fmt_hline
+		wri Q^fmt_header "  deg field angle" "mm object height" 
+		wri ^fmt_subheader
+		wri ^fmt_hline
+		for ^i_fld 1 ^n_fields
+			^fields_x_old(^i_fld) == (xan f^i_fld)
+			^fields_y_old(^i_fld) == (yan f^i_fld)
+			^fields_x_new(^i_fld) == (x r1 f^i_fld)
+			^fields_y_new(^i_fld) == (y r1 f^i_fld)
+			wri Q^fmt ^fields_x_old(^i_fld) ^fields_y_old(^i_fld) &
+				^fields_x_new(^i_fld) ^fields_y_new(^i_fld)
+		end for
+		wri ^fmt_hline
+	else 
+		wri Q"Conjugate type 'cc' not yet supported" num_to_str(^conjtype)
+		goto EXIT
+	end if
+	
+	wri "Proceed with reversing?"
+	rpr "(y/cancel) >"
+	rea Q"'c'" ^response
+	rpr 
+	if upcase(^response) <> 'Y'
+		goto EXIT
+	end if
+	
+	!----------------------------------------------------------------
+	! so far the lens has been untouched
+	! now that the reversion is comfirmed, we change system data
+	
+	!set ape ! freeze current semi-diameters.
+	
+	! 1. fields
+	del fa
+	ins f1..^n_fields
+	for ^i_fld 1 ^n_fields
+		$field_dbitem_new_x f^i_fld ^fields_x_new(^i_fld)
+		$field_dbitem_new_y f^i_fld ^fields_y_new(^i_fld)
+	end for
+	del fl
+	
+	! 2. conjugates
+	del sol sa
+	thi so ^new_s
+	rdy so ^new_R
+	thi s^i_sl ^new_s_
+	rdy si ^new_R_
+	$cmd_afocal
+	
+	! 3. aperture
+	if ^conjtype = 1 ! lens->collimator
+		nao ^new_NA
+		!set nao
+	else
+		epd ^new_EPD
+		!set epd
+	end if
+	!----------------------------------------------------------------
+else 
+	wri Q"Reversing surfaces 'dd' to 'dd' inclusive." ^i_sf ^i_sl
+	wri "Field and aperture data will not be changed."
+	rpr "Proceed? (y/cancel)"
+	rea Q"'c'" ^response
+	rpr 
+	if upcase(^response) <> 'Y'
+		goto EXIT
+	end if
+	
+	del so s^i_sf..^i_sl
+end if
+
+flx s^i_sf..^i_sl
+
+vie; go
+
+lbl EXIT
+chk no
+ver yes

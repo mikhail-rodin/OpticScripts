@@ -21,6 +21,16 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `mtf.seq` - resolution figures for any 2 modulation values (default is 0.2 and 0.3)
 
 ## Lens modification
++ `reverse.seq` - flip lens & auto-convert fields and pupils
++ `ins_lens.seq` - fully interactive insertion of a subsystem from a lens file
+
+  Unlike CodeV built-in `COPY` command, this macro
+  1. takes care of zoom data (variable airspaces and conjugates);
+  2. recognizes a relay/converted inserted right before the image and brings along its image-space conjugates;
+  3. doesn't require a long string of parameters: lens file and surface are specified interactively.
+  
+  Because of (3), both main and aux lenses have to be in the same directory.
+
 + `ins_elt.seq` - insert a spherical element of given power & bending
 + `ins_xcyl.seq`, `ins_ycyl.seq` - insert a cylindrical element
 + `ins_plate.seq` - insert a (bent) plane parallel plate

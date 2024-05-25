@@ -1,0 +1,367 @@
+ver no
+chk yes
+! Insert one system into another.
+! Fully interactive unlike CV COP command.
+! Supports zooms (unlike COP, too), but not multiconf systems, 
+! i.e. zoomed airspaces and conjugates are retained, 
+! but other parameters are dezoomed.
+!
+! Dependencies: libgeom
+!
+lcl num ^i_ins_after ^i_ins_before ^i_sf ^i_sl 
+lcl num ^i_srf ^i_ml_srf
+lcl num ^i_zoom ^n_zooms_ml ^n_zooms_aux 
+lcl num ^i_zoomed_thi ^i_ztable_thi_row_start ^i_ztable_row 
+lcl num ^flag_zoomed_thi_not_included
+lcl num ^buf_rnd ^start_row ^zoom_start_row ^r
+lcl str ^srf_type ^glass
+lcl num ^cx ^cy ^d ^n ^vd ^z_line
+lcl num ^aux_sP ^ml_sP_
+lcl num ^airspace ! between subsystems
+lcl str ^aux_lens_name ^main_lens_name
+lcl str ^response
+! buffer spec:
+! srf 1 on row 11
+! column:   1   2  3  4  5  6    7      8
+!   data: $type cx cy d  n  vd  $glass z_line*
+! *line in the zoom table
+! row 101: afocality (0 - focal, -1 = AFC, f>0 = AFI/AFO)
+! regardless if afocal parameters are zoomed, there is a zoom data row 101
+lcl num ^flag_afocal ^f_afi ^afocal_code ^flag_img_from_aux
+lcl str ^aux_zoomed_afocal_par ! = ['', 'afc', 'afo', 'afi']
+! row 102: last airspace, thi si-1
+lcl num ^flag_zoomed_s_
+
+! How it works:
+! 1. We start in main lens; save its filepath (should be reflected in title),
+!	promt for point of insertion
+! 2. Load the lens to be inserted, 
+! 	run a petz.seq macro for a tidy list of elements,
+! 	promt for a surface range.
+! 3. Save 2nd lens to b^buf_rnd
+! 4. Recreate 2nd lens inside the main one 
+
+rfd '' -1 -1 -1
+^aux_lens_name == #1
+^i_ins_after == #2
+^i_sf == #3
+^i_sl == #4
+
+!--settings------------
+^buf_rnd == 5
+^start_row == 11
+^zoom_start_row == 101
+^i_ztable_thi_row_start == 111
+!----------------------
+
+^main_lens_name == (tit)
+^n_zooms_ml == (num z)
+
+!--------------Load aux lens---------------------------------------------------
+
+if ^aux_lens_name = ''
+	wri "Usage: in ins_lens aux_lens_name [i_s_ins_after] [i_sf] [i_sl]"
+	wri "Select aux lens to be inserted in current dir?"
+	rpr "(y/cancel)>" 
+	read Q"'c'" ^response
+	rpr
+	if upcase(^response) = 'Y'
+		in get
+		ver no
+	else
+		goto EXIT
+	end if
+else 
+	in ^aux_lens_name
+end if
+
+! 2. We're in aux lens
+
+wri "Lens to be inserted is loaded."
+
+^n_zooms_aux == (num z)
+if ^n_zooms_aux > 1 and ^n_zooms_ml > 1
+	wri "Both systems are zoomed, ambiguity ensues."
+	wri "Auxiliary system has to be dezoomed (actual lens file will be unchanged)."
+	wri "Choose the position:"
+	zli sa
+	ver no
+	rpr "zoom pos>"
+	read Q"'dd'" ^i_zoom
+	rpr
+	if ^i_zoom >= 1 and ^i_zoom <= (num z)
+		dez z^i_zoom
+	else
+		wri Q"Zoom position must be between 1 and 'dd'. Bailing out." (num z)
+		goto CANCEL
+	end if
+!else if ^n_zooms_aux > 1 and not (^n_zooms_ml > 1)
+end if
+
+if (zpr afc)
+	^aux_zoomed_afocal_par == 'afc'
+else if (zpr afo)
+	^aux_zoomed_afocal_par == 'afo'
+else if (zpr afi)
+	^aux_zoomed_afocal_par == 'afi'
+else 
+	^aux_zoomed_afocal_par == ''
+end if
+	
+^flag_zoomed_s_ == (zpr thi si-1)
+	
+if ^i_sf < 0 or ^i_sl < 0
+	lbl SRF_RANGE_SEL
+	in petz
+	ver no
+	wri Q"Insert surfaces 1 to 'dd' into main lens?" (num s)-1
+	wri "Choose NO to edit surface range."
+	rpr "(y/n/c)>"
+	read Q"'c'" ^response
+	rpr
+	if upcase(^response) = 'Y'
+		^i_sf == 1
+		^i_sl == (num s) - 1
+	else if upcase(^response) = 'N'
+		wri "Please specify the first surface to include"
+		rpr "First surface>"
+		read Q"'ddd'" ^i_sf
+		rpr 
+		wri "...and the last surface."
+		rpr "Last surface>"
+		read Q"'ddd'" ^i_sl
+		rpr
+		if ^i_sf > ^i_sl
+			wri "ERROR: surfaces not in sequence: 'ddd' after 'ddd'" ^i_sl ^i_sf
+			goto CANCEL
+		end if
+		if ^i_sf < 1 or ^i_sl > (num s)-1
+			wri "ERROR: surfaces must be in s1..i-1 range"
+		end if
+	else
+		goto CANCEL
+	end if
+end if
+
+^flag_zoomed_thi_not_included == 0
+for ^i_srf 1 ^i_sf-1	! look for zoomed airspaces not included
+	if (zpr thi s^i_srf)
+		^flag_zoomed_thi_not_included == 1
+		wri Q"Warning: zoomed airspace after S'ddd' not included" ^i_srf
+	end if
+end for
+
+if ^flag_zoomed_thi_not_included
+	wri "Some zoomed airspace(s) are not copied into main lens"
+	wri "Edit surface range (Y to edit, N to keep as is)?"
+	rpr "(y/n/cancel)>"
+	rea Q"'c'" ^response
+	^response == upcase(^response)
+	if ^response = 'Y'
+		goto SRF_RANGE_SEL
+	else if ^response <> 'N'
+		goto CANCEL
+	end if
+end if
+
+^aux_sP == (enp) - (oal ss..^i_sf) ! from 1st included srf to entrance pupil
+
+^flag_img_from_aux == (^i_sl = @i_last_srf)
+
+! 3. save to buffer
+
+buf del b^buf_rnd
+
+for ^i_zoom 1 ^n_zooms_aux
+	
+	^f_afi == (afi z^i_zoom)
+	if @afocal_zoomed(^i_zoom)
+		if ^f_afi > 0
+			^afocal_code == ^f_afi
+		else ! AFC mode
+			^afocal_code == -1
+		end if
+	else
+		^afocal_code == 0
+	end if
+	
+	buf put b^buf_rnd i^zoom_start_row j^i_zoom ^afocal_code
+	buf put b^buf_rnd i^zoom_start_row+1 j^i_zoom (thi si-1 z^i_zoom)
+	
+end for
+
+^i_zoomed_thi == 0
+for ^i_srf 1 (num s)
+	^r == ^start_row + ^i_srf - 1
+	buf put b^buf_rnd i^r j1 (typ sur s^i_srf)
+	buf put b^buf_rnd i^r j2 (cux s^i_srf)
+	buf put b^buf_rnd i^r j3 (cuy s^i_srf)
+	buf put b^buf_rnd i^r j4 (thi s^i_srf)
+	buf put b^buf_rnd i^r j5 (ind s^i_srf)
+	buf put b^buf_rnd i^r j6 (abv s^i_srf)
+	buf put b^buf_rnd i^r j7 (gla s^i_srf)
+	if (zpr thi s^i_srf)
+		^i_zoomed_thi == ^i_zoomed_thi + 1
+		^i_ztable_row == ^i_ztable_thi_row_start + ^i_zoomed_thi - 1
+		buf put b^buf_rnd i^r j8 ^i_ztable_row ! link to ztable row w zoom data
+		for ^i_zoom 1 (num z)
+			^d == (thi s^i_srf z^i_zoom)
+			buf put b^buf_rnd i^i_ztable_row j^i_zoom ^d
+		end for
+	else
+		buf put b^buf_rnd i^r j8 0
+	end if
+end for
+
+wri Q"Aux lens prescription loaded into buffer #'d'" ^buf_rnd
+
+!------------------------------------------------------------------
+! 4. back to main lens
+in ^main_lens_name
+wri "Back to main lens."
+vie; go
+if ^i_ins_after < 0
+	in petz 
+	ver no
+	wri "Please specify the main lens' surface after which the aux lens is to be inserted."
+	wri "(0 for object)"
+	rpr "Insert after s#>"
+	read Q"'ddd'" ^i_ins_after
+	rpr
+	if ^i_ins_after < 0 or ^i_ins_after > (num s)-1
+		wri "ERROR: insertion point must be in so..i-1 range."
+		goto EXIT
+	end if
+end if
+
+^ml_sP_ == @local_expp_y_after(1, ^i_ins_after) 
+if ^ml_sP_ < 0 and ^aux_sP > 0
+	wri "Pupil matching not possible: both system have buried pupils."
+	wri "Airspace between systems set to 0."
+	^airspace == 0
+else
+	^airspace == ^ml_sP_ - ^aux_sP
+	if ^airspace < 0
+		wri "Pupil matching not possible:"
+		wri "Main system EXPP:      sP1_ = " ^ml_sP_
+		wri "Secondary system ENPP: sP2  = " ^aux_sP
+		wri Q"Airspace between systems turned out '4g.4g'; set to 0." ^airspace
+		^airspace == 0
+	else
+		wri "Main system exit pupil matched with secondary system's entrance pupil."
+		wri Q"sP1_ = '4g.4g' and sP2 = '4g.4g' allowed for '4g.4g' airspace" &
+			^ml_sP_ ^aux_sP ^airspace
+	end if
+end if
+
+if ^n_zooms_aux > 1
+	! we've already checked that main lens is not zoomed at the same time
+	! so we arrive here only if main lens is not a zoom
+	! (e.g. focusing attachment is put in front of a lens)
+	zoo ^n_zooms_aux
+	pos za y
+	wri Q"Auxiliary system is zoomed, main lens is not => 'd' zoom positions created" (num z)
+end if
+
+^flag_img_from_aux == ^flag_img_from_aux and (^i_ins_after = @i_last_srf)
+
+thi s^i_ins_after ^airspace
+
+^i_ins_before == ^i_ins_after + 1
+ins s^i_ins_before ! insert a dummy surface 
+! - in case the next surface is a paraxial collimator
+! Once such a collimator touches glass, CodeV impatiently throws an error,
+! and macro is aborted, even though the end result will be 100% valid.
+for ^i_srf ^i_sf ^i_sl
+	^r == ^start_row + ^i_srf - 1
+	^srf_type == (buf.str b^buf_rnd i^r j1)
+	^cx == (buf.num b^buf_rnd i^r j2)
+	^cy == (buf.num b^buf_rnd i^r j3)
+	^d == (buf.num b^buf_rnd i^r j4)
+	^n == (buf.num b^buf_rnd i^r j5)
+	^vd == (buf.num b^buf_rnd i^r j6)
+	^glass == (buf.str b^buf_rnd i^r j7)
+	^z_line == (buf.num b^buf_rnd i^r j8)
+	
+	ins s^i_ins_before
+	^i_ml_srf == ^i_ins_before
+	^i_ins_before == ^i_ins_before + 1
+	
+	if ^srf_type = 'CYL'
+		cyl s^i_ml_srf
+		cux s^i_ml_srf ^cx
+	end if
+	cuy s^i_ml_srf ^cy
+	
+	if ^z_line > 0
+		zoo thi s^i_ml_srf
+		for ^i_zoom 1 ^n_zooms_aux
+			^d == (buf.num b^buf_rnd i^z_line j^i_zoom)
+			thi s^i_ml_srf z^i_zoom ^d
+			thc s^i_ml_srf z^i_zoom 0 ! variable
+		end for
+	else
+		thi s^i_ml_srf ^d
+	end if
+	
+	if ^n > 1.05
+		gla s^i_ml_srf str_to_num(^glass)
+	end if
+end for
+del s^i_ins_before ! delete the dummy surface
+
+if ^flag_img_from_aux
+	wri "Aux lens (up its to last surface) has been placed after main lens' last surface."
+	wri "Therefore image-space conjugates will be copied from aux lens."
+
+	if ^aux_zoomed_afocal_par <> ''
+		
+		if ^aux_zoomed_afocal_par <> 'afc'
+			if not (dum si-1)
+				ins si
+			end if
+			$aux_zoomed_afocal_par 100 ! temp placeholder f'
+		else
+			afc yes
+		end if
+		
+		zoo $aux_zoomed_afocal_par
+		
+		for ^i_zoom 1 (num z)
+			^afocal_code == (buf.num b^buf_rnd i^zoom_start_row j^i_zoom)
+			if ^afocal_code < 0
+				afc z^i_zoom yes
+			else if ^afocal_code = 0
+				afc z^i_zoom no
+				afi z^i_zoom no
+			else
+				$aux_zoomed_afocal_par z^i_zoom ^afocal_code
+			end if
+		end for
+	end if 
+	
+	if ^flag_zoomed_s_
+	! it's important that we zoom (thi si-1) only after we've made sure
+	! that si-1 is a dummy surface that can carry a paraxial lens
+		zoo thi si-1
+		for ^i_zoom 1 (num z)
+			thi si-1 z^i_zoom (buf.num b^buf_rnd i^zoom_start_row+1 j^i_zoom)
+		end for
+		thc si-1 za 100 ! conjugates aren't an optimization parameter
+	end if
+end if
+!-----------------------------------------------------------------
+out no
+vie; go
+out yes
+
+goto EXIT
+
+lbl CANCEL
+in ^main_lens_name
+wri "Back to main lens, insertion cancelled."
+vie; go
+
+lbl EXIT
+chk no
+ver yes
