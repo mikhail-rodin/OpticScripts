@@ -15,8 +15,8 @@ rfd ''
 ^name_len == lenstr(^name)
 if ^name = ''
 	! no args
-	buf del b0
 	out no
+	buf del b0
 	buf yes
 	lib
 		dir *.len
@@ -90,7 +90,7 @@ if ^name = ''
 		^name == (buf.str i^row j1)
 		^i_delim == locstr(^name, ' ')
 		^name == substr(^name, 1, ^i_delim-1)
-		wri "Load '30c'?" ^name
+		wri Q"Load '30c'?" ^name
 		wri "There might be unsaved changes to current lens"
 		rpr "(y/cancel) >"
 		rea Q"'c'" ^response
