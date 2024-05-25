@@ -26,8 +26,8 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 
   Unlike CodeV built-in `COPY` command, this macro
   1. takes care of zoom data (variable airspaces and conjugates);
-  2. recognizes a relay/converted inserted right before the image and brings along its image-space conjugates;
-  3. doesn't require a long string of parameters: lens file and surface are specified interactively.
+  2. recognizes a relay/converter inserted right before the image and brings along its image-space conjugates;
+  3. doesn't require a long string of parameters: lens file and surface indices are specified interactively.
   
   Because of (3), both main and aux lenses have to be in the same directory.
 
