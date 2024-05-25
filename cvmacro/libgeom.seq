@@ -4,7 +4,8 @@
 ! | |    | | '_ \| | |_ |/ _ \/ _ \| '_ ` _ \ 
 ! | |____| | |_) | |__| |  __/ (_) | | | | | |
 ! |______|_|_.__/ \_____|\___|\___/|_| |_| |_|
-!                                             
+!     
+ver no                                        
 chk yes
 ! Note: in CodeV, all angles (paraxial slopes and real ray dir cosines) are specified AFTER refraction.
 !
@@ -28,13 +29,16 @@ END FCT ((afc z^i_zoom) or (((afi z^i_zoom) > 1.01 or (afo z^i_zoom) > 1.01) and
 FCT @afocal
 END FCT @afocal_zoomed(^g_i_default_zoom)
 
-FCT @conj_type
+FCT @conj_type_zoomed(num ^i_zoom)
 ! type of conjugates
 ! 0 = inf, 1 = finite, i.e. 01 = lens, 10 = collimator
 	num ^objspace ^imspace
-	^imspace == not @afocal
+	^imspace == not @afocal_zoomed(^i_zoom)
 	^objspace == ((typ fld) = 'OBJ') or ((thi so) < 1e12)
 END FCT 10*^objspace + ^imspace
+
+FCT @conj_type
+END FCT @conj_type_zoomed(^g_i_default_zoom)
 
 FCT @i_last_srf 
 	num ^i
@@ -45,6 +49,25 @@ FCT @i_last_srf
 		^i == (num s) - 1
 	end if
 END FCT ^i ! img = ^i + 1
+
+FCT @thi_zoom_range(num ^i_srf)
+	num ^d ^d_min ^d_max ^range ^i_zoom
+	if (num z) = 1
+		^range == 0
+	else
+		^d_min == (thi s^i_srf z1)
+		^d_max == ^d_min
+		for ^i_zoom 2 (num z)
+			^d == (thi s^i_srf z^i_zoom)
+			if ^d > ^d_max
+				^d_max == ^d
+			else if ^d < ^d_min
+				^d_min == ^d
+			end if
+		end for
+		^range == ^d_max - ^d_min
+	end if
+END FCT ^range
 
 FCT @afocal_units2rad_scale
 ! multiply by returned value to get radians
@@ -393,3 +416,4 @@ FCT @angular_airy_rad_x(num ^i_fld)
 END FCT @angular_airy_rad_x_zoomed(^i_fld, ^g_i_default_zoom)
 
 chk no
+ver yes
