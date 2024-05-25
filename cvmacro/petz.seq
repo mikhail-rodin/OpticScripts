@@ -1,4 +1,4 @@
-ver no 
+ver no
 chk yes
 ! Per-element power & Petzval sum statistics
 ! Dependencies: libgeom
@@ -23,9 +23,12 @@ if ^flag_RSOS
 	^fmt_s_hline == "+----+----'dd'---+-------=|APERTURE|=-------------+---------+---------+---------+"
 	^fmt_header ==  "| Elt| Surfaces|     Phi  =  Phi_thin +   dPhi  |    S4i  |   S4_sum|  R_petz |"
 else 
-	wri 'TODO'
+	^fmt_hline  ==  "+----+---------+--------------------------------+--------------------------------+---------+---------+"
+	^fmt_s_hline == "+----+----'dd'---+------=|APERTURE-Y|=------------+------=|APERTURE-X|=------------+---------+---------+"
+	^fmt_header ==  "| Elt| Surfaces| Y:  Phi  =  Phi_thin +   dPhi  | X:  Phi  =  Phi_thin +   dPhi  |S4_sum: Y|S4_sum: X|"	
 end if
 ^fmt_y        == "| 'dd' | 'dd' - 'dd' |'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g'|'4g.4g'|'4g.4g'|"
+^fmt_xy == "| 'dd' | 'dd' - 'dd' |'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g'|'4g.4g'|"
 
 if (afi) > 1.01
 	^i_srf_last == (num s) - 2
@@ -105,16 +108,27 @@ for ^i_srf 1 ^i_srf_last
 			^i_srf_elt_last == ^i_srf + 1
 			^i_srf_elt_first == ^i_srf_elt_last - ^elt_length
 			^phi_elt_x == 1/(efx s^i_srf_elt_first..^i_srf_elt_last)
+			if absf(^phi_elt_x) < 1e-6 ! 1 km
+				^phi_elt_x == 0
+			end if
 			^phi_elt_y == 1/(efy s^i_srf_elt_first..^i_srf_elt_last)
+			if absf(^phi_elt_y) < 1e-6 ! 1 km
+				^phi_elt_y == 0
+			end if
 			^petz_lens_sum_x == ^petz_lens_sum_x + ^petz_elt_sum_x
 			^petz_lens_sum_y == ^petz_lens_sum_y + ^petz_elt_sum_y
-			^Rpetz_x == 1/^petz_lens_sum_x
-			^Rpetz_y == 1/^petz_lens_sum_y
+			^Rpetz_x == 1/(^petz_lens_sum_x + 1e-15)
+			^Rpetz_y == 1/(^petz_lens_sum_y + 1e-15)
 			! print element
 			if ^flag_RSOS 
 				wri Q^fmt_y ^i_elt ^i_srf_elt_first ^i_srf_elt_last &
 					^phi_elt_y ^phi_thin_y (^phi_elt_y-^phi_thin_y) &
 					^petz_elt_sum_y ^petz_lens_sum_y ^Rpetz_y
+			else
+				wri Q^fmt_xy ^i_elt ^i_srf_elt_first ^i_srf_elt_last &
+					^phi_elt_y ^phi_thin_y (^phi_elt_y-^phi_thin_y) &
+					^phi_elt_x ^phi_thin_x (^phi_elt_x-^phi_thin_x) &
+					^petz_lens_sum_y ^petz_lens_sum_x
 			end if
 			^petz_elt_sum_x == 0
 			^petz_elt_sum_y == 0
