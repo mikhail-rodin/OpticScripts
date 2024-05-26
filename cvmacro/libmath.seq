@@ -1,6 +1,49 @@
 ver no
 chk yes
 
+gbl num ^g_roundf_threshold ^g_infty ^g_minus_infty
+^g_roundf_threshold == 0.4999999999999999 ! arg max roundf(x) = 0
+^g_infty == 1e18
+^g_minus_infty == -1e18
+
+fct @floor(num ^x)
+	lcl num ^y
+	if ^x >= 0 and ^x < 1
+		^y == 0
+	else
+		^y == roundf(^x-0.5)
+	end if
+end fct ^y
+
+fct @ceil(num ^x)
+end fct @floor(^x)+1
+
+fct @fix(num ^x) ! round towards origo
+	lcl num ^y
+	if ^x > 0
+		^y == @floor(^x)
+	else 
+		^y == @ceil(^x)
+	end if
+end fct ^y
+
+fct @round(num ^x, num ^digits) ! digits after decimal, 0 = integer
+	lcl num ^y
+	^y == 10**-^digits*roundf(^x*10**^digits)
+end fct ^y
+
+fct @float_exp(num ^x)
+	lcl num ^e
+	if ^x = 0
+		^e == ^g_minus_infty ! for proper asymptotics
+	else
+		^e == @floor(log10f(absf(^x)))
+	end if
+end fct ^e
+
+fct @float_mantissa(num ^x, num ^e)
+end fct ^x/10**^e
+
 FCT @chebyshev_nodes(num ^nodes(16), num ^n, num ^a, num ^b)
 	num ^i
 	for ^i 1 ^n
@@ -8,7 +51,7 @@ FCT @chebyshev_nodes(num ^nodes(16), num ^n, num ^a, num ^b)
 	end for
 END FCT 0
 
-FCT @heaviside(num ^x)
+FCT @heaviside(num ^x) ! Heaviside step function
 	num ^y
 	if ^x > 0
 		^y == 1
