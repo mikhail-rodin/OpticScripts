@@ -1,0 +1,260 @@
+ver no
+chk yes
+
+! text processing lib
+! dependencies: libmath
+
+! only arrays are passed by reference in CV - scalars and strings aren't
+! thus the only way to return a string from a function is via a global var
+gbl str ^g_out_str
+
+fct @padstr(str ^in, num ^len)
+	lcl num ^delta_len ^mod ^i
+	lcl num ^n16 ^n8 ^n4
+	lcl str ^s
+	
+	^delta_len == ^len - lenstr(^in)
+	if ^delta_len > 0
+		
+		^n16 == @floor(^delta_len/16)
+		^mod == ^delta_len - 16*^n16
+		^n8  == @floor(^mod/8)
+		^mod == ^delta_len - 8*^n8
+		^n4  == @floor(^mod/4)
+		
+		^s == ''
+		
+		for ^i 1 ^n16
+			^s == concat(^s, '                ')
+		end for
+		
+		if ^n8 >= 1
+			^s == concat(^s, '        ')
+		end if
+		
+		if ^n4 >= 1
+			^s == concat(^s, '    ')
+		end if
+		
+		for ^i ^n16*16+^n8*8+^n4*4 ^delta_len-1
+			^s == concat(^s, ' ')
+		end for
+		
+		^g_out_str == concat(^s, ^in)
+	else 
+		^g_out_str == ^in
+	end if
+end fct ^delta_len
+
+fct @num2str(num ^x)
+	! CodeV num_to_str function sometimes switches to exp format
+	! This one is consistently decimal-format
+	! Returns: 1. string via ^g_out_str
+	!          2. positional index of decimal point; <0 if integer
+	lcl num ^i_pt ! comma/point position
+	lcl num ^x_int ^x_fract ^x_fract_shifted
+	lcl num ^i ^N_leading_zeros ^precision
+	lcl str ^x_int_str ^x_fract_str ^out
+	
+	^precision == 9 ! digits
+	! 9 is maximum because num_to_str switches to exp for integers over 1e10
+	
+	^i_pt == -10
+	^x_int == @floor(absf(^x))
+	^x_int_str == num_to_str(^x_int)
+	
+	^x_fract == absf(^x) - ^x_int
+	
+	if ^x_fract < 10**-^precision
+	! integer
+		^out == ^x_int_str
+	else
+		^N_leading_zeros == -@float_exp(^x_fract) - 1
+		^x_fract_shifted == roundf(^x_fract*10**^precision)
+		
+		^x_fract_str == num_to_str(^x_fract_shifted)
+		for ^i 1 ^N_leading_zeros
+			! zero-pad
+			^x_fract_str == concat('0', ^x_fract_str)
+		end for
+		
+		^i_pt == lenstr(^x_int_str) + 1
+		^out == concat(concat(^x_int_str, '.'), ^x_fract_str)
+	end if
+	
+	if ^x < 0
+		^out == concat('-', ^out)
+		^i_pt == ^i_pt + 1
+	end if
+	
+	^g_out_str == ^out
+end fct ^i_pt
+
+fct @format(str ^fmt, num ^val)
+	! Replace first format qualifier encountered in a string.
+	! Formatted string is stored in a global var.
+	! By repeatedly applying this function 
+	! one can replace however many fields they will.
+	! Format strings are per CodeV standard: '4d.5d' = 'dddd.ddddd'
+	! 	* due to limitations of num_to_str, .7d is maximum precision
+	!
+	! Example:
+	!   ^fmt == "'dd.d'% at 'dd' deg"      ! standard CodeV Q-string
+	!	^e == @format(^fmt, (diy fl))      ! 1st  substitution
+	!   ! ^e is error code
+	!	^fmt == ^g_out_str                 ! retrieve result
+	!	^e == ^e + @format(^fmt, (yan fl)) ! 2nd substitution
+	!	wri ^g_out_str
+	!
+	lcl num ^i ^i_start_num ^i_pt ^i_end_num ^fmt_len ^num_len
+	lcl num ^N_digits ^N_digits_fract 
+	lcl str ^out_start ^out_end ^type_char
+
+	! for decimal format
+	lcl num ^x ^x_int ^x_decimal
+	lcl str ^x_str ^x_str_int ^x_str_decimal
+	
+	! for exp format
+	lcl num ^m ^e ^e_abs ^mantissa_padding
+	lcl str ^m_str ^e_str ^e_abs_str
+		
+	lcl num ^errcode ^tmp
+	
+	^errcode == 0
+	
+	^fmt_len == lenstr(^fmt)
+	^i_start_num == locstr(^fmt, "'")
+	^i_end_num == ^i_start_num + locstr(substr(^fmt, ^i_start_num+1, ^fmt_len), "'")
+	^num_len == ^i_end_num - ^i_start_num - 1
+	^errcode == not (^num_len > 0) ! ^num_len=0 for empty '' 
+	if not ^errcode
+		^type_char == substr(^fmt, ^i_start_num+1, 1)
+		^N_digits == str_to_num(^type_char)
+		^i_pt == ^i_start_num + locstr(substr(^fmt, ^i_start_num+1, ^num_len), ".")
+		if ^i_pt > ^i_start_num
+		! fractional format
+			if ^N_digits < 1
+				^N_digits == ^i_pt - ^i_start_num - 1
+			else
+				^type_char == substr(^fmt, ^i_start_num+2, 1)
+			end if
+			
+			^N_digits_fract == str_to_num(substr(^fmt, ^i_pt+1, 1))
+			if ^N_digits_fract < 1
+				^N_digits_fract == ^i_end_num - ^i_pt - 1
+			end if
+			
+			^e == @float_exp(^val)
+			
+			if ^type_char = 'g'
+			! auto-select just like CodeV does
+				
+				if ^N_digits < absf(^e + 1)
+					^type_char == 'e'
+				else
+					^type_char == 'd'
+				end if
+				
+			end if
+			
+			if ^type_char = 'd'
+				^N_digits_fract == minf(^N_digits_fract, 7)
+				
+				^x == @round(^val, ^N_digits_fract)
+				^i_pt == @num2str(^x) 
+				^x_str_decimal == ^g_out_str
+				
+				! trailing zeroes
+				if ^i_pt < 0 ! integer, needs trailing zeroes
+					^x_str_decimal == concat(^x_str_decimal, '.')
+					^i_pt == lenstr(^x_str_decimal)
+					
+					for ^i 1 ^N_digits_fract
+						^x_str_decimal == concat(^x_str_decimal, '0')
+					end for
+				else
+					^x_str_decimal == substr(^x_str_decimal, 1, ^i_pt + ^N_digits_fract)
+				end if
+				
+				! leading whitespaces
+				if ^i_pt - 1 < ^N_digits ! fractional
+					^tmp == @padstr(^x_str_decimal, ^N_digits + ^N_digits_fract + 1)
+					^x_str_int == ^g_out_str				
+				end if
+		
+				^x_str == ^x_str_decimal
+			else if ^type_char = 'e'
+				^N_digits_fract == maxf(^N_digits_fract-4, 0)
+				
+				^m == @round(@float_mantissa(^val, ^e), ^N_digits_fract)
+				
+				^e_abs == absf(^e)
+				^e_abs_str == num_to_str(^e_abs)
+				if ^e_abs < 10
+					^e_abs_str == concat('00', ^e_abs_str)
+				else
+					^e_abs_str == concat('0', ^e_abs_str)
+				end if
+				
+				if ^e > 0
+					^e_str == concat("e+", ^e_abs_str)
+				else
+					^e_str == concat("e-", ^e_abs_str)
+				end if
+				
+				^i_pt == 2 + (^m < 0) ! mantissa's decimal point position
+				^mantissa_padding == ^N_digits + ^N_digits_fract
+				
+				if ^N_digits_fract > 0
+					^m_str == substr(num_to_str(^m), 1, ^i_pt + ^N_digits_fract)
+					
+					if ^mantissa_padding > lenstr(^m_str)
+						^tmp == @padstr(^m_str, ^mantissa_padding)
+						^m_str == ^g_out_str
+					end if
+				else
+					^m_str == substr(num_to_str(^m), 1, ^i_pt-1)
+				end if
+				
+				^x_str == concat(^m_str, ^e_str)
+			else
+				^errcode == ^errcode + 1
+			end if
+		else
+		! integer
+			if ^N_digits < 1 ! e.g. 'dddd' instead of '4d'  
+				^N_digits == ^i_end_num - ^i_start_num - 1
+			else
+				^type_char == substr(^fmt, ^i_start_num+2, 1)
+			end if
+			
+			if ^type_char <> 'd'
+				^errcode == ^errcode + 1
+			end if
+			
+			^x == roundf(^val)
+			^x_str ==  num_to_str(^x)
+			
+			if ^N_digits > lenstr(^x_str)
+				^tmp == @padstr(^x_str, ^N_digits)
+				^x_str == ^g_out_str
+			end if
+		end if
+		
+		if ^i_start_num > 1
+			^out_start == substr(^fmt, 1, ^i_start_num-1)
+			^x_str == concat(^out_start, ^x_str)
+		end if
+		
+		if ^i_end_num < ^fmt_len
+			^out_end == substr(^fmt, ^i_end_num+1, ^fmt_len)
+			^x_str == concat(^x_str, ^out_end)
+		end if
+
+		^g_out_str == ^x_str
+		
+	end if
+end fct ^errcode
+
+chk no
+ver yes
