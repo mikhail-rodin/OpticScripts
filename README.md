@@ -104,7 +104,6 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `lib_ys.seq` - Yuan-Seidel anamorphic lens aberrations
 + `libmfg.seq` - manufacturability
 + `libmath.seq` - non-optics specific math
-+ `libutil.seq` - utility functions for text and plotting
 + `libtxt.seq` - string processing
 + `globals.seq` - env var declarations
 + `xy.seq` - plot non-rotationally symmetric lens
