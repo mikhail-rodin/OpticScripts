@@ -1,0 +1,71 @@
+ver no
+chk yes
+
+lcl num ^i_zoom ^i_fld
+lcl num ^scale ^w ^w_sum ^w_percent
+lcl str ^usage ^fmt ^fmt_header ^fmt_hline ^w_str
+lcl num ^e
+
+rfd -1 -1
+^i_zoom == #1
+^scale == #2
+
+^usage == "Usage: wtz [i_zoom] [weight_scaling]"
+
+if ^scale < 0 or ^i_zoom < 0
+	wri ^usage
+else
+	for ^i_fld 1 (num f)
+		^w == (wtf z^i_zoom f^i_fld)
+		wtf z^i_zoom f^i_fld ^w*^scale
+	end for
+end if
+
+! calculate sum of weights and create format strings
+
+^fmt == "|'dd' |" ! field pos index
+^fmt_header == '| F |'
+^fmt_hline  == '+---+'
+^w_sum == 1e-18
+
+for ^i_zoom 1 (num z)
+	^fmt == concat(^fmt, "  'dd.dd'")
+	^fmt_header == concat(^fmt_header, concat("   Z", num_to_str(^i_zoom)))
+	
+	if ^i_zoom < 10
+		^fmt_header == concat(^fmt_header, " ")
+	end if
+	
+	^fmt_hline  == concat(^fmt_hline, "------")
+	
+	for ^i_fld 1 (num f)
+		^w_sum == ^w_sum + (wtf z^i_zoom f^i_fld)
+	end for
+	
+end for
+
+^fmt == concat(^fmt, ' |')
+^fmt_header == concat(^fmt_header, ' |')
+^fmt_hline == concat(^fmt_hline, '-+')
+
+! print out
+
+wri ^fmt_hline
+wri ^fmt_header
+wri ^fmt_hline
+
+for ^i_fld 1 (num f)
+	^e == ^e + @format(^fmt, ^i_fld)
+	^w_str == ^g_out_str
+	for ^i_zoom 1 (num z)
+		^w_percent == 100*(wtf f^i_fld z^i_zoom)/^w_sum
+		^e == ^e + @format(^w_str, ^w_percent)
+		^w_str == ^g_out_str
+	end for
+	wri ^w_str
+end for
+
+wri ^fmt_hline
+
+chk no
+ver yes
