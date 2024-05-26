@@ -6,6 +6,8 @@
     ```
     pth seq pre c:\cvuser\macros\
     ddm m
+    in libmath
+    in libtxt
     in libgeom
     in libmfg
     in globals
@@ -42,6 +44,10 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `relay.seq` - create a new lens relaying the current lens' image
 
   Image becomes object, EXP becomes ENP. Fields, wavelengths and image curvature are taken care of.
++ `wtz.seq` - matrix of optimization weigths for each field at every zoom position
+
+  All field weights for a given zoom position can be scaled at once with `in wtz [z] [multiplier]` - `wtz.seq` acts like a 'missing' WTZ command would've acted.
+
 + `sph2xcyl.seq`, `sph2ycyl.seq` - convert surfaces M..N into X or Y cylinders
 
 ## Fields setup
@@ -55,7 +61,7 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 
     Saves both a binary LEN and a text SEQ file. Deals with a decades-old problem of Code V randomly corrupting the derivative increment vector in LEN files - this is what has been causing all those 'Singular variable' and 'Unstable condition' errors since CV9 or probably even CV8.
 
-+ `get.seq` - list lenses in directory and load by ordinal
++ `get.seq` - search for lenses in directory and load by ordinal
   
   This is too much to type:
   ```
@@ -67,10 +73,12 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
   ```
   This is much better:
   ```
-  > in get
-  > 12 ! load 12th lens in list
+  > in get 'rev'
+  > 12
   > y
   ```
+  Here, all lenses with 'rev' in the name are listed, and you select the №12. 
+  If no search string is specified, all LEN files in the directory are displayed.
 
 + `gsview.seq` - view Nth best GS solution
     
@@ -96,5 +104,7 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `lib_ys.seq` - Yuan-Seidel anamorphic lens aberrations
 + `libmfg.seq` - manufacturability
 + `libmath.seq` - non-optics specific math
++ `libutil.seq` - utility functions for text and plotting
++ `libtxt.seq` - string processing
 + `globals.seq` - env var declarations
 + `xy.seq` - plot non-rotationally symmetric lens
