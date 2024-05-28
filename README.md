@@ -1,6 +1,11 @@
-# Code V macros
+# OpticScripts
 
-## How to use
+- [Code V macros](#code-v-macros)
+- [Zemax macros](#zemax-macros)
+
+## Code V macros
+
+### How to use
 1. Copy into a dir that's traversed by CodeV, e.g. `c:\cvuser\macros\`.
 2. Load libraries on startup. Your `defaults.seq` will contain something like this:
     ```
@@ -16,18 +21,18 @@
 
 These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO 8859-1 characters, they should be byte-to-byte identical to ASCII and thus palatable to CodeV.
 
-## Lens analysis
+### Lens analysis
 + `res.seq` - resolution figures & transverse aberration plots
 + `petz.seq` - element power distribution and Petzval sums
 + `amag.seq` - afocal magnification
 + `mtf.seq` - resolution figures for any 2 modulation values (default is 0.2 and 0.3)
 
-## Plotting
+### Plotting
 + `lay.seq` - view lens at one (`in lay 2`) or every (w/o args) zoom position with auto scaling and color coded surface types
 + `xz.seq` - same as `lay.seq`, but XZ section is shown instead of YZ
 + `xy.seq` - 3D plot of a lens
 
-## Lens modification
+### Lens modification
 + `reverse.seq` - flip lens & auto-convert fields and pupils
 + `ins_lens.seq` - fully interactive insertion of a subsystem from a lens file
 
@@ -55,13 +60,13 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 
 + `sph2xcyl.seq`, `sph2ycyl.seq` - convert surfaces M..N into X or Y cylinders
 
-## Fields setup
+### Fields setup
 + `fields_diag.seq` - N equal-area field rings
 + `fields_skew.seq` - rectangular angular field with diagonal points
 + `fields_diag2xy.seq` - convert a diagonal field spec to a rectangular with a given aspect ration
 + `fields_xy2diag.seq` - convert a rectagular field spec into a diagonal one
 
-## File management
+### File management
 + `store.seq` - save and refresh derivatives
 
     Saves both a binary LEN and a text SEQ file. Deals with a decades-old problem of Code V randomly corrupting the derivative increment vector in LEN files - this is what has been causing all those 'Singular variable' and 'Unstable condition' errors since CV9 or probably even CV8.
@@ -104,10 +109,13 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
     > in gsview   ! view next (4th) lens
     ```
 
-## Libraries & utilities
+### Libraries & utilities
 + `libgeom.seq` - geometric optics
 + `lib_ys.seq` - Yuan-Seidel anamorphic lens aberrations
 + `libmfg.seq` - manufacturability
 + `libmath.seq` - non-optics specific math
 + `libtxt.seq` - string processing
 + `globals.seq` - env var declarations
+
+## Zemax macros
++ `autocentering.zpl` - fill in wedge tolerances for elements that can self-center in a grinder's chuck
