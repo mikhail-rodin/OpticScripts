@@ -1,6 +1,10 @@
 ver no
 chk yes
 
+! Matrix of field & zoom optimization weights in percent.
+! in wtz [z] [multiplier] to scale weights of the entire configuration
+!         z       <0      to enter absolute weight
+
 lcl num ^i_zoom ^i_fld
 lcl num ^scale ^w ^w_sum ^w_percent
 lcl str ^usage ^fmt ^fmt_header ^fmt_hline ^w_str
@@ -12,12 +16,19 @@ rfd -1 -1
 
 ^usage == "Usage: wtz [i_zoom] [weight_scaling]"
 
-if ^scale < 0 or ^i_zoom < 0
+if ^scale < 0 and ^i_zoom < 0
 	wri ^usage
 else
 	for ^i_fld 1 (num f)
-		^w == (wtf z^i_zoom f^i_fld)
-		wtf z^i_zoom f^i_fld ^w*^scale
+		if not (zpr wtf f^i_fld)
+			zoo wtf f^i_fld
+		end if
+		if ^scale < 0
+			wtf z^i_zoom f^i_fld ^scale
+		else
+			^w == (wtf z^i_zoom f^i_fld)
+			wtf z^i_zoom f^i_fld ^w*^scale
+		end if
 	end for
 end if
 

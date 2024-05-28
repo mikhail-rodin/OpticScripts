@@ -36,7 +36,7 @@ if (buf.fnd) ! last search successful
 	^n_lenses == 0
 	for ^row ^row_start ^row_start+1000
 		if ^row <= (buf.lst b0)
-			if (buf.col i^row) < 4
+			if (buf.col b0 i^row) < 4
 				goto PARSE_END
 			else 
 				^n_lenses == ^n_lenses + 1
@@ -55,13 +55,13 @@ end if
 wri ^fmt_hline
 for ^i_lens 1 ^n_lenses 2
 	^row == ^row_start + ^i_lens - 1
-	^filename1 == (buf.str i^row j1)
+	^filename1 == (buf.str b0 i^row j1)
 	^i_delim == locstr(^filename1, ' ')
 	^filename1 == substr(^filename1, 1, ^i_delim-1)
 	^fn1_match == locstr(^filename1, ^search_str)
 
-	if (buf.typ i^row j4) = 'NUM'
-		^erf1 == (buf.num i^row j4)
+	if (buf.typ b0 i^row j4) = 'NUM'
+		^erf1 == (buf.num b0 i^row j4)
 	else
 		^erf1 == -1
 	end if
@@ -69,18 +69,18 @@ for ^i_lens 1 ^n_lenses 2
 	if ^n_lenses > 1 and ^i_lens < ^n_lenses
 	! not the only nor the last 
 	
-		^filename2 == (buf.str i^row+1 j1)
+		^filename2 == (buf.str b0 i^row+1 j1)
 		^i_delim == locstr(^filename2, ' ')
 		^filename2 == substr(^filename2, 1, ^i_delim-1)
 		^fn2_match == locstr(^filename2, ^search_str)
 		
-		if (buf.typ i^row+1 j4) = 'NUM'
-			^erf2 == (buf.num i^row+1 j4)
+		if (buf.typ b0 i^row+1 j4) = 'NUM'
+			^erf2 == (buf.num b0 i^row+1 j4)
 		else
 			^erf2 == -1
 		end if
 
-		if (lenstr(^filename1) < 20 or lenstr(^filename2) < 20) &
+		if (lenstr(^filename1) < 20 and lenstr(^filename2) < 20) &
 			and (^fn1_match and ^fn2_match)
 			! 2 columns
 			wri Q^fmt_2col ^i_lens ^filename1 ^erf1 ^i_lens+1 ^filename2 ^erf2
@@ -107,7 +107,7 @@ rpr
 ^input == str_to_num(^response)
 if ^input >= 1 and ^input <= ^n_lenses
 	^row == ^row_start + ^input - 1
-	^name == (buf.str i^row j1)
+	^name == (buf.str b0 i^row j1)
 	^i_delim == locstr(^name, ' ')
 	^name == substr(^name, 1, ^i_delim-1)
 	wri Q"Load '30c'?" ^name
@@ -131,7 +131,7 @@ tit ^name
 
 lbl EXIT
 out no
-vie; go
+in lay
 out yes
 chk no
 ver yes
