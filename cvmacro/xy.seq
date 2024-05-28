@@ -1,7 +1,96 @@
+ver no
+chk yes
+! perspective view of a lens
+! Usage: in xy [zoom_position]
+! Dependencies: libgeom
+
+lcl num ^i_zoom ^first ^last ^conjtype
+lcl num ^i_srf
+lcl num ^L ^max_displayed_airspace ! relative to L
+lcl num ^i_fx ^i_fy
+lcl num ^flag_RSOS
+
+rfd -1
+^i_zoom == #1
+^max_displayed_airspace == 2
+
+if ^i_zoom < 0
+	wri "Usage: in xy [i_zoom=1]"
+	^i_zoom == 1
+end if
+pos z^i_zoom onl yes
+
+^conjtype == @conj_type_zoomed(^i_zoom)
+^first == 1
+^last == @i_last_srf
+^L == (oal z^i_zoom s^first..^last)
+
+if modf(^conjtype, 2)
+	! finite img conjugate
+	if (thi si-1 z^i_zoom) < ^L*^max_displayed_airspace
+		^last == (num s)
+	end if
+end if
+
+^flag_RSOS == ((sym) = 'ROT')
+^i_fx == @arg_max_x_field
+^i_fy == @arg_max_y_field
+
+!--actual plotting-----------
+out no
 vie
-plc s1 xz
-do
-vpt -25 35
+
+vpt -25 35 
+! 1.azimuth 2.height_over_horizon
+hid y
+
+if not ^flag_RSOS
+	lrs 2 ! extra resolution
+	!aap yes
+end if
+
+if ^conjtype >= 10 and (thi so z^i_zoom) < ^L*^max_displayed_airspace
+	sur so..^last
+else
+	sur s^first..^last
+	eri -20
+end if
+
+ero 20
+
+for ^i_srf ^first ^last
+	if (typ sur s^i_srf) = 'CYL'
+		mod s^i_srf qua
+	else
+		mod s^i_srf hal
+	end if
+end for 
+
+!----------------------------
+! rays
 rfr no
-edge no
+rat hit sa yes 
+
+! chief 
+rat col gre 
+rat dot 5
+! rsi fl 0 0
+fan f^i_fy yz 3 
+
+if not ^flag_RSOS
+	rat col blu
+	fan f^i_fx xz 3 
+end if
+
+! marginal
+rat col red
+rat dot 11
+rsi f1 0 1
+
 go
+
+pos za yes
+
+out yes
+chk no
+ver yes

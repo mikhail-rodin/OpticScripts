@@ -1,0 +1,263 @@
+ver no
+chk yes
+! Lens layout with autoscaling
+! Usage: in lay [zoom] [xz_flag]
+! * if no zoom position specified, all are plotteds
+
+lcl num ^L ^L_max ! lens length glass to glass
+lcl num ^TOTR ^TOTR_rel ! total track length
+lcl num ^s0 ^s0_max ^sF ^sF_max
+lcl num ^max_displayed_airspace ! relative to L
+lcl num ^D ^D_max ^D_max_rel ! max lens diameter
+! ^L_max x ^D_max is lens' bounding box
+! ^TOTR x ^D_max is overall optical path's bounding box
+lcl num ^h ^w    ! paper size
+lcl num ^conjtype ^flag_long_obj_conj ^flag_long_img_conj
+lcl num ^flag_finite_obj ^flag_finite_img
+lcl num ^i_srf ^first ^last
+lcl num ^x_margin ^y_margin ! relative to W and H resp.
+lcl num ^i_zoom ^sel_zoom ^n_zooms ^h_pitch ^v_pitch
+lcl num ^h_offset ^v_offset
+lcl num ^i_fx ^i_fy ! full x and y fields
+lcl num ^flag_RSOS ^flag_XZ
+lcl str ^srf_type
+lcl str ^col ^col_marginal ^col_oblique ^col_ycyl ^col_xcyl ^col_asph
+
+rfd -1 -1
+!--------------------------------------------
+!--------settings----------------------------
+^col_marginal == 'red'
+^col_oblique == 'gre'
+^col_xcyl == 'mag'
+^col_ycyl == 'blu'
+^col_asph == 'yel'
+
+^x_margin == 0.05
+^y_margin == 0.1
+^max_displayed_airspace == 2 ! times OAL
+
+^h == 297
+^w == 254 ! default 10in
+
+!--------------------------------------------
+
+^sel_zoom == #1
+^flag_XZ == (#2 > 0)
+if ^sel_zoom < 0 and (num z) = 1
+	^sel_zoom == 1
+end if
+
+^first == 1
+^last == @i_last_srf
+
+^flag_RSOS == ((sym) = 'ROT')
+
+^i_fx == @arg_max_x_field
+^i_fy == @arg_max_y_field
+
+if ^sel_zoom < 0
+! plot all zoom positions
+	^n_zooms == (num z)
+	
+	^flag_long_img_conj == 0
+	^flag_long_obj_conj == 0
+	^flag_finite_img == 1
+	^flag_finite_obj == 1
+	^s0_max == 0
+	^sF_max == 0
+	^L_max == 0
+	^D_max == 0
+	
+	for ^i_zoom 1 ^n_zooms
+		^conjtype == @conj_type_zoomed(^i_zoom)
+		
+		^L == (oal s^first..^last z^i_zoom) 
+	
+		if ^L > ^L_max
+			^L_max == ^L
+		end if
+		
+		for ^i_srf ^first ^last
+			^D == 2*(sd s^i_srf z^i_zoom)
+			if ^D > ^D_max
+				^D_max == ^D
+			end if
+		end for
+		
+		if modf(^conjtype, 2) 
+		! finite img conj
+			^sF == (thi si-1 z^i_zoom)
+			
+			if ^sF > ^sF_max
+				^sF_max == ^sF
+			end if
+			
+			if ^sF > ^L*^max_displayed_airspace
+			! huge s'F distance
+				^flag_long_img_conj == 1
+			end if
+		else
+			^flag_finite_img == 0
+		end if
+		
+		if ^conjtype >=10
+		! finite objspace conj
+			^s0 == (thi so z^i_zoom)
+		
+			if ^s0 > ^s0_max
+				^s0_max == ^s0
+			end if
+		
+			if ^s0 > ^L*^max_displayed_airspace
+			! too much s1 distance
+				^flag_long_obj_conj == 1
+			end if
+		else 
+			^flag_finite_obj == 0
+		end if
+	end for
+
+	^TOTR == ^L_max
+
+	if ^flag_finite_obj and not ^flag_long_obj_conj
+		^first == 0
+		^TOTR == ^TOTR + ^s0_max
+	end if
+	
+	if ^flag_finite_img and not ^flag_long_img_conj
+		^last == (num s)
+		^TOTR == ^TOTR + ^sF_max
+	end if
+else
+	^n_zooms == 1
+	
+	^conjtype == @conj_type_zoomed(^sel_zoom)
+	^L == (oal z^sel_zoom s^first..^last)
+	^TOTR == ^L 
+	
+	if modf(^conjtype, 2) and (thi si-1 z^sel_zoom) < ^L*^max_displayed_airspace
+	! finite imspace conj and acceptable s'F distance
+	! => include img surface
+		^last == (num s)
+		^TOTR == (oal s1..i z^sel_zoom)
+	end if
+	
+	if ^conjtype >=10 and (thi so z^sel_zoom) < ^L*^max_displayed_airspace
+	! finite objspace conj and acceptable s1 distance
+		^first == 0 ! include object surface
+		^TOTR == ^TOTR + (thi so z^sel_zoom)
+	end if
+	
+	pos z^sel_zoom onl yes
+end if 
+
+^TOTR_rel == ^TOTR/^w
+^D_max_rel == ^D_max/^h
+
+!-----------------------------------------------
+! actual plotting
+
+vie
+
+if ^flag_XZ
+	plc xz
+end if
+
+sur s^first..^last
+
+for ^i_srf ^first ^last
+	^srf_type == (typ sur s^i_srf)
+	if ^srf_type = 'CYL' or ^srf_type = 'YTO' or ^srf_type = 'XTO'
+		if absf((cuy s^i_srf)) > 0 or ^srf_type = 'YTO'
+			^col == ^col_ycyl
+		else if absf((cux s^i_srf)) > 0 or ^srf_type = 'XTO'
+			^col == ^col_xcyl
+		else 
+			^col == 'bla'
+		end if
+	else if (typ sur s^i_srf) = 'SPH'
+		^col == 'bla'
+	else 
+		^col == ^col_asph
+	end if
+	
+	lns s^i_srf $col
+end for
+
+!ero 30
+!eri 10
+hat yes ! mirror hatching
+! lrs 2 ! resolution
+
+if ^n_zooms = 1
+	nbr ele s1..i-1
+	sf (1-^x_margin)/^TOTR_rel
+else if ^n_zooms = 2
+	ret y n
+	sf (1-^x_margin)/^TOTR_rel
+	^v_pitch == ^D_max_rel*0.5
+	ofs z1 nor 0 -^v_pitch
+	ofs z2 nor 0 ^v_pitch
+else if ^n_zooms = 3
+	sf (1-^x_margin)/^TOTR_rel
+	ret y y n
+	^v_pitch == ^D_max_rel*0.75
+	ofs z1 nor 0 -^v_pitch
+	ofs z2 nor 0 0
+	ofs z3 nor 0 ^v_pitch
+else if ^n_zooms = 4
+	ret y y y n
+	sf (1-^x_margin)/(2*^TOTR_rel)
+	^h_pitch == ^TOTR_rel*0.45
+	^v_pitch== ^D_max_rel*0.4
+	ofs z1 nor -^h_pitch ^v_pitch
+	ofs z2 nor -^h_pitch -^v_pitch
+	ofs z3 nor ^h_pitch ^v_pitch
+	ofs z4 nor ^h_pitch -^v_pitch
+end if
+
+!--------- rays --------------------
+rfr no
+
+! axis
+rat stl 3 ! dashed
+rat col bla
+rsi f1 0 0 
+
+rat stl 1 ! back to solid line
+
+
+
+
+
+if ^flag_XZ
+rat col gre 
+	! marginal
+	rat col $col_marginal
+	rsi f1 1 0
+	
+	! oblique
+	rat col $col_oblique
+	fan f^i_fx xz 3 
+else
+	! marginal
+	rat col $col_marginal
+	rsi f1 0 1
+	
+	! oblique
+	rat col $col_oblique
+	fan f^i_fy yz 3 
+end if
+
+go
+
+wri  "                    Color codes:"
+wri  "        Surface type               Ray type"
+wri Q"     'ccc'      Sphere         'ccc'      Axial" 'BLA' upcase(^col_marginal)
+wri Q"     'ccc'   Y cyl/toroid      'ccc'     Oblique" upcase(^col_ycyl) upcase(^col_oblique)
+wri Q"     'ccc'   X cyl/toroid" upcase(^col_xcyl)
+
+pos za yes
+
+chk no
+ver yes
