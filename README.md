@@ -22,6 +22,11 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `amag.seq` - afocal magnification
 + `mtf.seq` - resolution figures for any 2 modulation values (default is 0.2 and 0.3)
 
+## Plotting
++ `lay.seq` - view lens at one (`in lay 2`) or every (w/o args) zoom position with auto scaling and color coded surface types
++ `xz.seq` - same as `lay.seq`, but XZ section is shown instead of YZ
++ `xy.seq` - 3D plot of a lens
+
 ## Lens modification
 + `reverse.seq` - flip lens & auto-convert fields and pupils
 + `ins_lens.seq` - fully interactive insertion of a subsystem from a lens file
@@ -106,4 +111,3 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `libmath.seq` - non-optics specific math
 + `libtxt.seq` - string processing
 + `globals.seq` - env var declarations
-+ `xy.seq` - plot non-rotationally symmetric lens
