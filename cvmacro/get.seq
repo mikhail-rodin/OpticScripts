@@ -6,16 +6,32 @@ ver no
 chk y
 lcl str ^name ^search_str ^path ^title ^response
 lcl num ^fn1_match ^fn2_match
-lcl num ^row_start ^row ^i_lens ^n_lenses
+lcl num ^fn1_len ^fn2_len ^fn_len_max
+lcl num ^buf ^row_start ^row ^i_lens ^n_lenses
 lcl str ^filename1 ^filename2 ! for printing 2 columns
-lcl str ^fmt_2col ^fmt_1col ^fmt_hline
+lcl str ^title ^dir
+lcl str ^fmt_2col ^fmt_1col ^fmt_hline ^fmt_err_long_fn ^fmt_txt
 lcl num ^i_delim ^input
-lcl num ^erf1 ^erf2
+lcl num ^erf1 ^erf2 ^ERR_THRESHOLD ^ERR_LONG_FNAME ^flag_long_fname
 
 rfd ''
 ^search_str == #1
 
+^buf == 1 ! we copy to a R/W buffer
+
+! LIB.DIR option is used to scan directory contents
+! It truncates filenames (column 1) to 30 characters.
+! Title column is the last one and thus not truncated (or is to 80c, maybe)
+! So when we encounter a filename that takes up the whole column 1,
+!   we compare it to title. If title starts the same, but is longer,
+!   we substitute if for a filename.
+^fn_len_max == 30
+^ERR_THRESHOLD == -100
+^ERR_LONG_FNAME == -1000
+^flag_long_fname == 0
+
 out no
+
 buf del b0
 buf yes
 lib
@@ -23,19 +39,25 @@ lib
 	! we use LEN, not SEQ, because they come with 
 	! metadata like merit function value
 can
-out yes
 buf no
-buf fnd b0 i1..6 "No files found"
+
+buf del b1
+buf mov b^buf
+buf cop b0
+
+out yes
+
+buf fnd b^buf i1..6 "No files found"
 if (buf.fnd)
 	wri "No .LEN files in " (cd)
 	goto EXIT
 end if
-buf fnd b0 i1..6 "FILES IN DIRECTORY"
+buf fnd b^buf i1..6 "FILES IN DIRECTORY"
 if (buf.fnd) ! last search successful
 	^row_start == (buf.i) + 3
 	^n_lenses == 0
 	for ^row ^row_start ^row_start+1000
-		if ^row <= (buf.lst b0)
+		if ^row <= (buf.lst b^buf)
 			if (buf.col b0 i^row) < 4
 				goto PARSE_END
 			else 
@@ -48,54 +70,117 @@ if (buf.fnd) ! last search successful
 	lbl PARSE_END
 end if
 
-^fmt_hline == "+---------------------------------------------------------------------------+"
-^fmt_2col == "|'ddd' '20c' '6g.4g' |'ddd' '20c' '6g.4g' |"
-^fmt_1col == "|'ddd' '58c' '6g.4g' |"
+^fmt_hline        == "+---------------------------------------------------------------------------+"
+^fmt_txt          == "| 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'|"
+^fmt_2col         == "|'ddd' '20c' '6g.4g' |'ddd' '20c' '6g.4g' |"
+^fmt_1col         == "|'ddd' '58c' '6g.4g' |"
+^fmt_err_long_fn  == "|'ddd' '30c'... - filename too long, cannot load     |"
 
+wri ^fmt_hline
+wri Q^fmt_txt (cd)
 wri ^fmt_hline
 for ^i_lens 1 ^n_lenses 2
 	^row == ^row_start + ^i_lens - 1
-	^filename1 == (buf.str b0 i^row j1)
+	^filename1 == (buf.str b^buf i^row j1)
 	^i_delim == locstr(^filename1, ' ')
 	^filename1 == substr(^filename1, 1, ^i_delim-1)
 	^fn1_match == locstr(^filename1, ^search_str)
 
-	if (buf.typ b0 i^row j4) = 'NUM'
-		^erf1 == (buf.num b0 i^row j4)
+	if (buf.typ b^buf i^row j4) = 'NUM'
+		^erf1 == (buf.num b^buf i^row j4)
 	else
 		^erf1 == -1
 	end if
+
+	^fn1_len == lenstr(^filename1)
+	if ^fn1_len >= ^fn_len_max
+	! then it might've be truncated
+		if (buf.typ b^buf i^row j5) = 'STR'
+		! if a title is present
+			^title == (buf.str b^buf i^row j5)
+			if locstr(^title, ^filename1) = 1 &
+				and lenstr(^title) >= ^fn1_len
+				^filename1 == ^title
+				^fn1_len == lenstr(^filename1)
+				buf put b^buf i^row j1 ^filename1
+			else ! no title => error code for later handling
+				^flag_long_fname == 1
+				^erf1 == ^ERR_LONG_FNAME
+			end if
+		else ! no title => error code for later handling
+			^flag_long_fname == 1
+			^erf1 == ^ERR_LONG_FNAME
+		end if
+	end if
+	
+	buf put b^buf i^row j4 ^erf1
 	
 	if ^n_lenses > 1 and ^i_lens < ^n_lenses
 	! not the only nor the last 
 	
-		^filename2 == (buf.str b0 i^row+1 j1)
+		^filename2 == (buf.str b^buf i^row+1 j1)
 		^i_delim == locstr(^filename2, ' ')
 		^filename2 == substr(^filename2, 1, ^i_delim-1)
 		^fn2_match == locstr(^filename2, ^search_str)
 		
-		if (buf.typ b0 i^row+1 j4) = 'NUM'
-			^erf2 == (buf.num b0 i^row+1 j4)
+		if (buf.typ b^buf i^row+1 j4) = 'NUM'
+			^erf2 == (buf.num b^buf i^row+1 j4)
 		else
 			^erf2 == -1
 		end if
+		
+		^fn2_len == lenstr(^filename1)
+		if ^fn2_len >= ^fn_len_max
+		! then it might've be truncated
+			if (buf.typ b^buf i^row+1 j5) = 'STR'
+			! if a title is present
+				^title == (buf.str b^buf i^row+1 j5)
+				if locstr(^title, ^filename2) = 1 &
+					and lenstr(^title) >= ^fn2_len
+					^filename2 == ^title
+					^fn2_len == lenstr(^filename2)
+					buf put b^buf i^row+1 j1 ^filename2
+				else ! no title => error code for later handling
+					^flag_long_fname == 1
+					^erf2 == ^ERR_LONG_FNAME
+				end if
+			else ! no title => error code for later handling
+				^flag_long_fname == 1
+				^erf2 == ^ERR_LONG_FNAME
+			end if
+		end if
+	
+		buf put b^buf i^row+1 j4 ^erf2
 
-		if (lenstr(^filename1) < 20 and lenstr(^filename2) < 20) &
-			and (^fn1_match and ^fn2_match)
+		if (^fn1_len < 20 and ^fn2_len < 20) &
+			and (^fn1_match and ^fn2_match) &
+			and ^erf1 > ^ERR_THRESHOLD and ^erf2 > ^ERR_THRESHOLD
 			! 2 columns
 			wri Q^fmt_2col ^i_lens ^filename1 ^erf1 ^i_lens+1 ^filename2 ^erf2
 		else
 			if ^fn1_match
-				wri Q^fmt_1col ^i_lens ^filename1 ^erf1
+				if ^erf1 > ^ERR_THRESHOLD
+					wri Q^fmt_1col ^i_lens ^filename1 ^erf1
+				else if ^erf1 = ^ERR_LONG_FNAME
+					wri Q^fmt_err_long_fn ^i_lens substr(^filename1, 1, 30)
+				end if
 			end if
 			
 			if ^fn2_match
-				wri Q^fmt_1col ^i_lens+1 ^filename2 ^erf2	
+				if ^erf1 > ^ERR_THRESHOLD
+					wri Q^fmt_1col ^i_lens+1 ^filename2 ^erf2
+				else if ^erf2 = ^ERR_LONG_FNAME
+					wri Q^fmt_err_long_fn ^i_lens+1 substr(^filename2, 1, 30)
+				end if					
 			end if
 		end if
 	else
 		if ^fn1_match
-			wri Q^fmt_1col ^i_lens ^filename1 ^erf1
+			if ^erf1 > ^ERR_THRESHOLD
+				wri Q^fmt_1col ^i_lens ^filename1 ^erf1
+			else if ^erf1 = ^ERR_LONG_FNAME
+				wri Q^fmt_err_long_fn ^i_lens substr(^filename1, 1, 30)
+			end if
 		end if
 	end if
 end for
@@ -107,10 +192,21 @@ rpr
 ^input == str_to_num(^response)
 if ^input >= 1 and ^input <= ^n_lenses
 	^row == ^row_start + ^input - 1
-	^name == (buf.str b0 i^row j1)
+	^erf1 == (buf.num b^buf i^row j4)
+	if ^erf1 = ^ERR_LONG_FNAME 
+		wri Q"Lens 'ddd' has a long filename." ^input
+		wri "CodeV built-in file browser does not support filenames over 30 characters."
+		wri "get.seq tried to extract filename from title, but could not find it there."
+		wri "Please re-save the file with store.seq and try again."
+		goto EXIT
+	end if
+	
+	^name == (buf.str b^buf i^row j1)
 	^i_delim == locstr(^name, ' ')
-	^name == substr(^name, 1, ^i_delim-1)
-	wri Q"Load '30c'?" ^name
+	if ^i_delim > 0
+		^name == substr(^name, 1, ^i_delim-1)
+	end if
+	wri "Loading " ^name
 	wri "There might be unsaved changes to current lens"
 	rpr "(y/cancel) >"
 	rea Q"'c'" ^response
@@ -131,6 +227,7 @@ tit ^name
 
 lbl EXIT
 out no
+wnd ope 1
 in lay
 out yes
 chk no
