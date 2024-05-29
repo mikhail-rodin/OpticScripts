@@ -11,9 +11,10 @@ lcl num ^petz_elt_sum_y ^petz_lens_sum_y ^S4y ^Wsum_y ^Ssum_y
 lcl num ^phi_norm_x ^V0x ^Ainv_cx ^Ainv_stop_x ^delta_umx_n
 lcl num ^phi_norm_y ^V0y ^Ainv_cy ^Ainv_stop_y ^delta_umy_n
 lcl num ^i_srf ^i_elt ^elt_length ^i_srf_elt_first ^i_srf_elt_last ^i_srf_last ^N_srfs
-lcl str  ^fmt_y ^fmt_xy
+lcl str ^fmt ^fmt_y ^fmt_xy ^fmt_sym
 lcl str ^fmt_header ^fmt_hline ^fmt_s_hline
-lcl num ^flag_RSOS ^conjtype
+lcl str ^srf_type
+lcl num ^flag_RSOS ^flag_RSS ^flag_RSE ^conjtype
 
 ^conjtype == @conj_type
 ^flag_RSOS == ((sym) = 'ROT')
@@ -28,7 +29,9 @@ else
 	^fmt_header ==  "| Elt| Surfaces| Y:  Phi  =  Phi_thin +   dPhi  | X:  Phi  =  Phi_thin +   dPhi  |S4_sum: Y|S4_sum: X|"	
 end if
 ^fmt_y        == "| 'dd' | 'dd' - 'dd' |'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g'|'4g.4g'|'4g.4g'|"
-^fmt_xy == "| 'dd' | 'dd' - 'dd' |'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g'|'4g.4g'|"
+^fmt_xy  == "| 'dd' | 'dd' - 'dd' |'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g' ='4g.4g'  +'4g.4g'|'4g.4g'|'4g.4g'|"
+^fmt_sym == "| 'dd' | 'dd' - 'dd' |'4g.4g' ='4g.4g'  +'4g.4g'| rot. symmetrical, S4i='4g.4g'|'4g.4g'|'4g.4g'|"
+
 
 if (afi) > 1.01
 	^i_srf_last == (num s) - 2
@@ -68,6 +71,8 @@ end if
 ^Wsum_x == 0
 ^Wsum_y == 0
 
+^flag_RSE == 1
+
 wri ^fmt_hline
 wri ^fmt_header
 wri ^fmt_hline
@@ -82,6 +87,11 @@ for ^i_srf 1 ^i_srf_last
 		^h_x == (hmx s^i_srf)
 		^h_y == (hmy s^i_srf)
 		^d == (thi s^i_srf)
+		^srf_type == (typ sur s^i_srf)
+		
+		if ^srf_type = 'CYL' or ^srf_type = 'AAS'
+			^flag_RSE == 0
+		end if
 		
 		^delta_umx_n == (umx s^i_srf)/^n_ - (umx s^i_srf-1)/^n
 		^delta_umy_n == (umy s^i_srf)/^n_ - (umy s^i_srf-1)/^n	
@@ -120,8 +130,15 @@ for ^i_srf 1 ^i_srf_last
 			^Rpetz_x == 1/(^petz_lens_sum_x + 1e-15)
 			^Rpetz_y == 1/(^petz_lens_sum_y + 1e-15)
 			! print element
-			if ^flag_RSOS 
-				wri Q^fmt_y ^i_elt ^i_srf_elt_first ^i_srf_elt_last &
+			if ^flag_RSOS or ^flag_RSE
+				if ^flag_RSOS
+					^fmt == ^fmt_y
+				else
+					! rotationally symmetrical element in a non-RSOS
+					^fmt == ^fmt_sym
+				end if
+			
+				wri Q^fmt ^i_elt ^i_srf_elt_first ^i_srf_elt_last &
 					^phi_elt_y ^phi_thin_y (^phi_elt_y-^phi_thin_y) &
 					^petz_elt_sum_y ^petz_lens_sum_y ^Rpetz_y
 			else
@@ -135,6 +152,7 @@ for ^i_srf 1 ^i_srf_last
 			^phi_thin_x == 0
 			^phi_thin_y == 0
 			^elt_length == 0
+			^flag_RSE == 1
 		end if
 	else if ^i_srf = (sto)
 		wri Q^fmt_s_hline ^i_srf
@@ -152,6 +170,7 @@ if ^flag_RSOS
 else 
 	wri Q"YZ: W = 'd.dd', S = 'd.dd'" ^Wsum_y ^Ssum_y
 	wri Q"XZ: W = 'd.dd', S = 'd.dd'" ^Wsum_x ^Ssum_x	
+	wri "For rotationally symmetrical elements, last column is local Petzval radius."
 end if
 
 lbl EXIT
