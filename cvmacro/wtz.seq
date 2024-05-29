@@ -6,7 +6,7 @@ chk yes
 !         z       <0      to enter absolute weight
 
 lcl num ^i_zoom ^i_fld
-lcl num ^scale ^w ^w_sum ^w_percent
+lcl num ^scale ^w ^w_sum ^w_percent ^w_zoom(32)
 lcl str ^usage ^fmt ^fmt_header ^fmt_hline ^w_str
 lcl num ^e
 
@@ -49,9 +49,11 @@ for ^i_zoom 1 (num z)
 	
 	^fmt_hline  == concat(^fmt_hline, "------")
 	
+	^w_zoom(^i_zoom) == 0
 	for ^i_fld 1 (num f)
-		^w_sum == ^w_sum + (wtf z^i_zoom f^i_fld)
+		^w_zoom(^i_zoom) == ^w_zoom(^i_zoom) + (wtf z^i_zoom f^i_fld)
 	end for
+	^w_sum == ^w_sum + ^w_zoom(^i_zoom)
 	
 end for
 
@@ -76,6 +78,18 @@ for ^i_fld 1 (num f)
 	wri ^w_str
 end for
 
+wri ^fmt_hline
+
+! print per-position sums
+^e == ^e + @format(^fmt, (num f))
+^w_str == ^g_out_str
+for ^i_zoom 1 (num z)
+	^w_percent == 100*^w_zoom(^i_zoom)/^w_sum
+	^e == ^e + @format(^w_str, ^w_percent)
+	^w_str == ^g_out_str
+end for
+
+wri ^w_str
 wri ^fmt_hline
 
 chk no
