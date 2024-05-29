@@ -7,7 +7,7 @@ ver no
 chk yes
 
 lcl num ^i_lens ^i_out_buf
-lcl str ^lensname ^symmetry ^celltype
+lcl str ^lensname ^celltype
 rfd -1
 
 ! constants/settings
@@ -31,13 +31,18 @@ if ^lensname = ''
 end if
 
 res ^lensname
-^symmetry == (sym)
-if ^symmetry = 'ROT'
-	vie; go
+
+if (sym) = 'ROT' or (num z) > 1
+	in lay
 else
 	in xy
 end if
-!in ray
+
+in res 0 ! no plotting
+ver no
+
+wri
+wri Q"Lens number 'ddd' loaded." ^i_lens
 
 ^g_i_gs_lens == ^i_lens
 
