@@ -1,9 +1,15 @@
 ver no
+rfd -1 -1
 ! args : index of 1st surface, Coddington bending factor
 ^i_srf == #1
 ^x == #2
 ^xcyl_flag == -1
 ^eps == 1e-12
+
+if ^i_srf < 0 or ^x < 0
+	wri "Usage: in bend first_surface Coddington_factor"
+	goto EXIT
+end if
 
 if (ind s^i_srf+1) < 1.1 and (ind s^i_srf-1) < 1.1 ! if air around
 	!then it's a lens element
@@ -66,7 +72,8 @@ else
 end if
 ^new_P == (^n-1)*(^new_c1 - ^new_c2 + ^d*(^n-1)*^new_c1*^new_c2/^n)
 wri "new f'=" 1/^new_P
-vie
-go
 
+in lay
+
+lbl EXIT
 ver yes
