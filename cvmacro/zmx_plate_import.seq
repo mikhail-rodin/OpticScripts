@@ -1,0 +1,60 @@
+ver no
+chk yes
+
+lcl num ^i_line
+lcl num ^i_radius ^tpd_ordinal ^r
+lcl str ^name ^tpd_fname ^seq_fname
+lcl str ^header
+gbl num ^fd ! file descriptor
+lcl num ^buf
+
+rfd ''
+^name == #1
+^buf == 1
+
+if ^name = ''
+	wri "Usage: in zmx_plate_import catalog_name"
+	goto EXIT
+end if
+
+^tpd_fname == concat(^name, '.tpd')
+^seq_fname == concat(^name, '_plates.seq')
+
+open new u^fd ^seq_fname
+
+^header == concat(concat("PLA M '", ^name), "'")
+wri u^fd ^header
+
+buf del b^buf
+buf imp b^buf lis ^tpd_fname
+wri "Reading " ^tpd_fname
+
+^i_radius == 0
+for ^i_line 1 (buf.lst b^buf)
+	if (buf.typ b^buf i^i_line j1) = 'NUM'
+		^tpd_ordinal == (buf.num b^buf i^i_line j1)
+		if ^tpd_ordinal > 0
+			if ^tpd_ordinal > ^i_radius 
+			! it is still incrementing
+				^r == (buf.num b^buf i^i_line j2)
+				wri u^fd num_to_str(^r)
+				^i_radius == ^i_radius + 1
+			end if
+		else if ^i_radius > 0
+		! we've reached the end
+			goto END
+		end if
+	end if
+end for
+lbl END
+
+wri Q"'ddddd' test plates found." ^i_radius
+
+wri u^fd "END"
+close u^fd
+
+wri "Radiuses saved to " ^seq_fname
+
+lbl EXIT
+chk no
+ver yes
