@@ -10,17 +10,19 @@ lcl num ^fields_x_old(16) ^fields_x_new(16)
 lcl num ^fields_y_old(16) ^fields_y_new(16)
 lcl num ^u_x_ ^u_y_ ! imspace ray slopes
 lcl num ^new_R ^new_R_ ! obj/img radius curvature
-lcl num ^conjtype ^new_s ^new_s_ ! conjugates
-lcl num ^f_ ^D ^D_ ^new_EPD ^new_NA ! aperture data 
+lcl num ^conjtype ^new_s ^new_s_ ^perf_lens_afocal ! conjugates
+lcl num ^f_ ^Dx ^Dy ^Dx_ ^Dy_ ^new_EPDx ^new_EPDy ^new_NA ^vig ! aperture data 
+lcl num ^flag_anamorphic_EXP
 lcl str ^response 
 lcl str ^fmt_header ^fmt_subheader ^fmt ^fmt_hline
 lcl str ^field_dbitem_new_x ^field_dbitem_new_y ^aperture_dbitem
-lcl str ^cmd_afocal
+lcl str ^cmd_afocal ^cmd_vu ^cmd_vl
 lcl num ^pi
 
 rfd -1 -1
 ^i_sf == #1
 ^i_sl == #2
+^perf_lens_afocal == 0
 ^conjtype == @conj_type	
 ^pi == 4*atanf(1)
 
@@ -39,19 +41,34 @@ if ^i_sf < 0 or ^i_sl < 0
 	^fmt == "|'4g.4g' '4g.4g' |'4g.4g' '4g.4g' |"
 	
 	^n_fields == (num f)
-	^D == (epd)
-	^D_ == @expd_y(1)
+	
+	^Dx == (epd) ! todo: anamorphic entrance pupils
+	^Dy == ^Dx
+	^Dx_ == @expd_x(1)
+	^Dy_ == @expd_y(1)
+	^flag_anamorphic_EXP == (absf((^Dx_-^Dy_)/^Dy_) > 1e-4)
+	
 	^f_ == (efy s^i_sf..^i_sl)
+	^perf_lens_afocal == ((afi) > (afc) or (afo) > (afc))
 	if ^conjtype = 10 ! collimator->lens
 		^new_s == 1e18
 		^new_s_ == (thi so)
 		^new_R == 1e18
 		^new_R_ == -(rdy so)
-		^new_EPD == ^D_
+		^new_EPDx == ^Dx_
+		^new_EPDy == ^Dy_
 		^field_dbitem_new_x == 'xan'
 		^field_dbitem_new_y == 'yan'
 		wri "You are reversing a collimator and getting a focal lens."
-		wri Q"F/# is 'dd.dd'" ^f_/^D_
+		
+		if ^flag_anamorphic_EXP
+			wri Q"Anamorphic exit pupil. Dx_ = '4g.4g', Dy_ = '4g.4g'" &
+				^Dx_ ^Dy_
+			wri "In the reversed system, anamorphic vignetting will be set."
+		else
+			wri Q"F/# is 'dd.dd'" ^f_/^Dy_
+		end if
+		
 		wri "Field conversions:"
 		wri ^fmt_hline
 		wri Q^fmt_header "  mm object height" "deg field angle"
@@ -60,8 +77,8 @@ if ^i_sf < 0 or ^i_sl < 0
 		for ^i_fld 1 ^n_fields
 			^fields_x_old(^i_fld) == (xob f^i_fld)
 			^fields_y_old(^i_fld) == (yob f^i_fld)
-			^u_x_ == (l r1 f^i_fld)/(n r1 f^i_fld)
-			^u_y_ == (m r1 f^i_fld)/(n r1 f^i_fld)
+			^u_x_ == (l r1 s^i_sl f^i_fld)/(n s^i_sl r1 f^i_fld)
+			^u_y_ == (m r1 s^i_sl f^i_fld)/(n s^i_sl r1 f^i_fld)
 			^fields_x_new(^i_fld) == atanf(^u_x_)*180/^pi
 			^fields_y_new(^i_fld) == atanf(^u_y_)*180/^pi
 			wri Q^fmt ^fields_x_old(^i_fld) ^fields_y_old(^i_fld) &
@@ -74,12 +91,15 @@ if ^i_sf < 0 or ^i_sl < 0
 		! - the chief ray won't trace
 		^new_R == -(rdy si)
 		^new_R_ == 1e18
-		^new_NA == sinf(atanf(0.5*^D/^f_))
+		^new_NA == sinf(atanf(0.5*^Dx/^f_))
 		^field_dbitem_new_x == 'xob'
 		^field_dbitem_new_y == 'yob'
 		^cmd_afocal == 'afc y'
 		wri "You are reversing a lens and getting a collimator."
-		wri Q"F/# = 'dd.dd' => NA = 'd.ddd'" ^f_/^D ^new_NA
+		
+		! todo: anamorphic entrance pupils
+		wri Q"F/# = 'dd.dd' => NA = 'd.ddd'" ^f_/^Dy ^new_NA
+		
 		wri "Field conversions:"
 		wri ^fmt_hline
 		wri Q^fmt_header "  deg field angle" "mm object height" 
@@ -113,8 +133,38 @@ if ^i_sf < 0 or ^i_sl < 0
 	
 	!set ape ! freeze current semi-diameters.
 	
-	! 1. fields
+	del sol sa
+	
+	! we temporarily minimize field and aperture
+	! so that there are no ray misses or TIR
 	del fa
+	if ^conjtype = 10 ! collimator->lens
+		nao 0.05
+	else if ^conjtype = 1 ! lens->collimator
+		epd 0.05
+	end if
+	
+	! 1. conjugates
+	thi so ^new_s
+	rdy so ^new_R
+	thi s^i_sl ^new_s_
+	rdy si ^new_R_
+
+	if ^conjtype = 1 ! lens->collimator
+		$cmd_afocal	
+	else
+		if ^perf_lens_afocal
+			afo no
+			afi no
+			del si-1
+		else
+			afc no
+		end if
+	end if
+	
+	flx s^i_sf..^i_sl
+	
+	! 2. fields
 	ins f1..^n_fields
 	for ^i_fld 1 ^n_fields
 		$field_dbitem_new_x f^i_fld ^fields_x_new(^i_fld)
@@ -122,22 +172,33 @@ if ^i_sf < 0 or ^i_sl < 0
 	end for
 	del fl
 	
-	! 2. conjugates
-	del sol sa
-	thi so ^new_s
-	rdy so ^new_R
-	thi s^i_sl ^new_s_
-	rdy si ^new_R_
-	$cmd_afocal
 	
 	! 3. aperture
 	if ^conjtype = 1 ! lens->collimator
 		nao ^new_NA
 		!set nao
 	else
-		epd ^new_EPD
+		if ^new_EPDy > ^new_EPDx
+			epd ^new_EPDy
+			^vig == 1 - ^new_EPDx/^new_EPDy
+			^cmd_vl == 'vlx'
+			^cmd_vu == 'vux'
+		else
+			epd ^new_EPDx
+			^vig == 1 - ^new_EPDy/^new_EPDx
+			^cmd_vl == 'vly'
+			^cmd_vu == 'vuy'
+		end if
 		!set epd
 	end if
+	
+	! 3.2 tangential vignetting
+	for ^i_fld 1 (num f)
+		! for some reason, vignetting commands don't accept an FA qualifier
+		! so we have to loop
+		$cmd_vl f^i_fld ^vig
+		$cmd_vu f^i_fld ^vig
+	end for
 	!----------------------------------------------------------------
 else 
 	wri Q"Reversing surfaces 'dd' to 'dd' inclusive." ^i_sf ^i_sl
@@ -150,11 +211,10 @@ else
 	end if
 	
 	del so s^i_sf..^i_sl
+	flx s^i_sf..^i_sl
 end if
 
-flx s^i_sf..^i_sl
-
-vie; go
+in lay
 
 lbl EXIT
 chk no

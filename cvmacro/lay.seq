@@ -226,15 +226,10 @@ rsi f1 0 0
 
 rat stl 1 ! back to solid line
 
-
-
-
-
 if ^flag_XZ
-rat col gre 
 	! marginal
 	rat col $col_marginal
-	rsi f1 1 0
+	rsi f1 (1-(vux f1)) 0
 	
 	! oblique
 	rat col $col_oblique
@@ -242,7 +237,7 @@ rat col gre
 else
 	! marginal
 	rat col $col_marginal
-	rsi f1 0 1
+	rsi f1 0 (1-(vuy f1))
 	
 	! oblique
 	rat col $col_oblique
