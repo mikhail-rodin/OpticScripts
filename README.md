@@ -2,6 +2,7 @@
 
 - [Code V macros](#code-v-macros)
 - [Zemax macros](#zemax-macros)
+- [Converters](#converters)
 
 ## Code V macros
 
@@ -28,11 +29,11 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `mtf.seq` - resolution figures for any 2 modulation values (default is 0.2 and 0.3)
 
 ### Plotting
-+ `lay.seq` - view lens at one (`in lay 2`) or every (w/o args) zoom position with auto scaling and color coded surface types
++ `lay.seq` - view lens at one (e.g. `in lay 2`) or every (just `in lay` w/o args) zoom position with auto scaling and color coded surface types
 + `xz.seq` - same as `lay.seq`, but XZ section is shown instead of YZ
 + `xy.seq` - 3D plot of a lens
 
-### Lens modification
+### Lens synthesis & modification
 + `reverse.seq` - flip lens & auto-convert fields and pupils
 + `ins_lens.seq` - fully interactive insertion of a subsystem from a lens file
 
@@ -54,11 +55,15 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `relay.seq` - create a new lens relaying the current lens' image
 
   Image becomes object, EXP becomes ENP. Fields, wavelengths and image curvature are taken care of.
+
++ `sph2xcyl.seq`, `sph2ycyl.seq` - convert surfaces M..N into X or Y cylinders
++ `apertures.seq` - auto set hard apertures (rectangular if element is not rotationally symmetric).
+
+### Optimization
+
 + `wtz.seq` - matrix of optimization weigths for each field at every zoom position
 
   All field weights for a given zoom position can be scaled at once with `in wtz [z] [multiplier]` - `wtz.seq` acts like a 'missing' WTZ command would've acted.
-
-+ `sph2xcyl.seq`, `sph2ycyl.seq` - convert surfaces M..N into X or Y cylinders
 
 ### Fields setup
 + `fields_diag.seq` - N equal-area field rings
@@ -119,3 +124,6 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 
 ## Zemax macros
 + `autocentering.zpl` - fill in wedge tolerances for elements that can self-center in a grinder's chuck
+
+## Converters
++ `cvmacro/zmx_plate_import.seq` - convert Zemax `.tpd` test plate file into a `.seq` file that can be used by Code V's TES option
