@@ -1,0 +1,143 @@
+ver no
+chk yes
+! Auto-set clear apertures, incl. rectangular for cylinders
+! Usage: in apertures [first_srf] [last_srf]
+! Dependencies: libmath, libmfg
+
+lcl num ^i_srf ^first ^last
+lcl num ^i_ray ^i_fld ^i_zoom
+lcl num ^chamfer ^sd
+lcl num ^hx ^hy ^hx_max ^hy_max ^Dx ^Dy
+lcl num ^D_new(255) ^Dx_new(255) ^Dy_new(255)
+lcl num ^flag_RSOS
+lcl str ^srf_type
+lcl str ^response
+lcl str ^fmt_circ ^fmt_rect ^fmt_hline ^fmt_header
+
+rfd -1 -1
+^first == maxf(#1, 1)
+^last == #2
+
+if ^last < 0
+	^last == (num s) - 1
+end if
+
+if ^first > ^last
+	wri "Usage: in apertures [first_srf] [last_srf]"
+	wri "Enter [first_srf]<[last_srf]"
+	goto EXIT
+end if
+
+^fmt_header == "|  S | Default D  | New aperture: diam. or Y*X  |"
+^fmt_hline  == "+----+------------+-----------------------------+"
+^fmt_circ == "|'ddd' |'ddddddd.ddd' |        'ddddddd.d' diam.      |"
+^fmt_rect == "|'ddd' |'ddddddd.ddd' |'ddd.d' x 'ddd.d',  diag = 'ddd.d' |"
+
+out no
+set ape
+out yes
+
+wri ^fmt_hline
+wri ^fmt_header
+wri ^fmt_hline
+
+for ^i_srf ^first ^last
+	if not (dum s^i_srf)
+		^srf_type == (typ sur s^i_srf)
+		
+		if ^srf_type = 'CYL'
+			^hx_max == 0
+			^hy_max == 0
+			
+			for ^i_zoom 1 (num z)
+				for ^i_fld 1 (num f)
+					for ^i_ray 2 5
+						^hx == absf((x r^i_ray s^i_srf f^i_fld z^i_zoom))
+						^hy == absf((y r^i_ray s^i_srf f^i_fld z^i_zoom))
+						
+						if ^hx > ^hx_max 
+							^hx_max == ^hx
+						end if
+						
+						if ^hy > ^hy_max 
+							^hy_max == ^hy
+						end if
+					end for
+				end for
+			end for
+			
+			^Dx == 2*^hx_max
+			^Dy == 2*^hy_max 
+			
+			! incl chamfer of the other side
+			^Dx == ^Dx + @prism_chamfer_tol(^Dy, 0.5)
+			^Dy == ^Dy + @prism_chamfer_tol(^Dx, 0.5)
+				
+			^Dx == @ceil(^Dx)
+			^Dy == @ceil(^Dy)
+			
+			^Dx_new(^i_srf) == ^Dx
+			^Dy_new(^i_srf) == ^Dy
+			
+			wri Q^fmt_rect ^i_srf 2*(sd s^i_srf) ^Dy ^Dx sqrtf(^Dy**2+^Dx**2)
+		else
+			^sd == (sd s^i_srf)
+			^sd == ^sd + @lens_chamfer_tol(^i_srf, 0)
+			
+			if ^sd < 1
+				^D_new(^i_srf) == 2*@round(^sd+0.005, 2)
+			else if ^sd < 10
+				^D_new(^i_srf) == 2*@round(^sd+0.05, 1)
+			else
+				^D_new(^i_srf) == 2*@ceil(^sd)
+			end if
+			
+			wri Q^fmt_circ ^i_srf 2*(sd s^i_srf) ^D_new(^i_srf)
+		end if
+	end if
+end for
+
+wri ^fmt_hline
+
+wri "Apply as hard apertures?"
+rpr "(y/cancel) >"
+rea ^response
+rpr 
+
+if upcase(substr(^response,1,1)) <> 'Y'
+	goto EXIT
+end if
+
+!-------------------------------------------------------------------
+! here changes are applied to system
+
+^flag_RSOS == 1
+for ^i_srf ^first ^last
+	if not (dum s^i_srf)
+		^srf_type == (typ sur s^i_srf)
+		
+		if ^srf_type = 'CYL'
+			^flag_RSOS == 0
+			rex L'elt' s^i_srf ^Dx_new(^i_srf)/2
+			rey L'elt' s^i_srf ^Dy_new(^i_srf)/2
+		else
+			cir s^i_srf ^D_new(^i_srf)/2
+		end if
+	end if
+end for
+
+wri "Apertures set."
+
+if ^flag_RSOS
+	in lay
+else
+	wnd ope 2
+	wnd plo p1
+	in lay
+	wnd plo p2
+	in xz
+end if
+
+lbl EXIT
+chk no
+ver yes
