@@ -1,4 +1,10 @@
-! manufacturability calculations
+! Manufacturability calculations.
+!
+! Note: real dimensions are toleranced, so they aren't scalars, they're distributions.
+! Therefore some functions may have ^tolrange parameters.
+!	^tolrange == 0 is nominal
+!	^tolrange == 1 is upper bound
+!	^tolrange == -1 is lower bound
 ver no
 chk yes
 
@@ -10,6 +16,93 @@ fct @min_edge_thi(num ^i_srf)
 	num ^D
 	^D == 2*(sd s^i_srf)
 end fct ^D*0.014286932 + 1.410238612
+
+fct @lens_chamfer_tol(num ^i_srf, num ^tolrange)
+	! Chamfer recommmendations from Okatov '83 
+	! Assumption: lenses are mounted with retaining rings, not rolled into a cell
+	! 	- the latter requires 2..5x more chamfer
+	!
+	! tol_pos
+	lcl num ^D ^flag_cemented ^m ^tol
+	! tolerance is one-sided positive, i.e. m[+tol]
+	
+	^D == (sd s^i_srf)/2
+	^flag_cemented == ((ind s^i_srf) > 1.05 and (ind s^i_srf+1) > 1.05)
+
+	if ^flag_cemented
+		^tol == 0.2
+		
+		if ^D < 10
+			^m == 0.1
+			^tol == 0.1
+		else if ^D < 30
+			^m == 0.1
+		else
+			^m == 0.2
+		end if
+	else
+		^m == 0.1
+		^tol == 0.3
+		
+		if ^D < 6
+			^tol == 0.1
+		else if ^D < 10
+			^tol == 0.2
+		else if ^D < 18
+			^m == 0.2
+		else if ^D < 30
+			^m == 0.3
+		else 
+			if ^D < 50
+				^m == 0.3
+			else if ^D < 80
+				^m == 0.4
+			else if ^D < 120
+				^m == 0.5
+			else
+				^m == 0.7
+			end if
+			
+			^tol == ^m + 0.1
+		end if
+	end if
+	
+	if ^tolrange > 0
+	! only positive tolerances
+		^m == ^m + ^tolrange*^tol
+	end if
+end fct ^m
+
+fct @lens_chamfer(num ^i_srf)
+end fct @lens_chamfer_tol(^i_srf, 0)
+
+fct @prism_chamfer_tol(num ^edge_len, num ^tolrange)
+	lcl num ^K ^tol
+	
+	if ^edge_len < 6
+		^K == 0.1
+	else if ^edge_len < 10
+		^K == 0.2
+	else if ^edge_len < 18
+		^K == 0.3
+	else if ^edge_len < 30
+		^K == 0.4
+	else if ^edge_len < 50
+		^K == 0.5
+	else
+		^K == 0.7
+	end if
+	
+	^tol == ^K + 0.1
+	
+	if ^tolrange > 0
+	! only positive tolerances
+		^K == ^K + ^tolrange*^tol
+	end if
+end fct ^K
+
+fct @prism_chamfer(num ^edge_len)
+end fct @prism_chamfer_tol(^edge_len, 0)
 
 fct @erf_coc_separation(num ^i_first, num ^min_sep)
 	! merit function penalty for insufficient meniscus CoC separation
