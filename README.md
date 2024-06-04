@@ -1,10 +1,22 @@
 # OpticScripts
-
-- [Code V macros](#code-v-macros)
+- [Standalone scripts](#standalone-scripts)
+- [CodeV macros](#codev-macros)
 - [Zemax macros](#zemax-macros)
 - [Converters](#converters)
 
-## Code V macros
+## Standalone scripts
+
++ `cam.py` - focusing cam generator
+
+  Creates cam functions (tabulated and approximated) for floating elements based on zoom data in a CodeV `.seq` file. Distance to object (S0 thickness) is converted to diopters and treated as a free variable that other zoomed thicknesses depend on.
+
+  Unlike CodeV built-in CAM option, uses Akima splines for interpolation and offers power series approximation. Plots airspace thickness and approximation error graphs.
+
++ `af3c.py` - first order layout of a 3-group Galilean telescope
+  
+  Generates 3 Zemax files for each of the 'scope's thin lenses. Those can be transformed into thick groups using Russinov's methodology, pre-optimized independently for minimum tolerance sensitivity with a curved field, and eventually assembled into a flat-field system.
+
+## CodeV macros
 
 ### How to use
 1. Copy into a dir that's traversed by CodeV, e.g. `c:\cvuser\macros\`.
