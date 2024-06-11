@@ -8,6 +8,10 @@ chk yes
 ! thus the only way to return a string from a function is via a global var
 gbl str ^g_out_str
 
+gbl str ^g_decimal_point
+! doesn't apply to format strings, those use '.' regardless
+^g_decimal_point == '.'
+
 fct @padstr(str ^in, num ^len)
 	lcl num ^delta_len ^mod ^i
 	lcl num ^n16 ^n8 ^n4
@@ -79,7 +83,7 @@ fct @num2str(num ^x)
 		end for
 		
 		^i_pt == lenstr(^x_int_str) + 1
-		^out == concat(concat(^x_int_str, '.'), ^x_fract_str)
+		^out == concat(concat(^x_int_str, ^g_decimal_point), ^x_fract_str)
 	end if
 	
 	if ^x < 0
@@ -166,7 +170,7 @@ fct @format(str ^fmt, num ^val)
 				
 				! trailing zeroes
 				if ^i_pt < 0 ! integer, needs trailing zeroes
-					^x_str_decimal == concat(^x_str_decimal, '.')
+					^x_str_decimal == concat(^x_str_decimal, ^g_decimal_point)
 					^i_pt == lenstr(^x_str_decimal)
 					
 					for ^i 1 ^N_digits_fract
@@ -255,6 +259,35 @@ fct @format(str ^fmt, num ^val)
 		
 	end if
 end fct ^errcode
+
+fct @format_str(str ^fmt, str ^sstr)
+	lcl num ^e ^fmt_len ^sstr_slot ^i_start_sstr ^i_end_sstr
+	lcl num ^len_qualifier
+	^e == 0
+	
+	^fmt_len == lenstr(^fmt)
+	^i_start_sstr == locstr(^fmt, "'")
+	^i_end_sstr == ^i_start_sstr + locstr(substr(^fmt, ^i_start_sstr+1, ^fmt_len), "'")
+	^sstr_slot == ^i_end_sstr - ^i_start_sstr - 1
+	
+	^len_qualifier == str_to_num(substr(^fmt, ^i_start_sstr+1, ^sstr_slot))
+	
+	if ^len_qualifier > 0
+		^sstr_slot == ^len_qualifier
+	end if
+	
+	^sstr == substr(^sstr, 1, ^sstr_slot)
+	
+	if ^i_start_sstr > 1
+		^sstr == concat(substr(^fmt, 1, ^i_start_sstr-1), ^sstr)
+	end if
+	
+	if ^i_end_sstr < ^fmt_len
+		^sstr == concat(^sstr, substr(^fmt, ^i_end_sstr+1, ^fmt_len))
+	end if
+
+	^g_out_str == ^sstr
+end fct ^e
 
 chk no
 ver yes
