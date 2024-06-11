@@ -1,0 +1,182 @@
+ver no
+chk yes
+! Generates a presription table in LaTeX
+! Dependencies: libtxt
+
+lcl num ^i_srf ^cx ^cy
+lcl str ^rx_str ^ry_str
+lcl num ^eps
+lcl str ^fmt1 ^fmt2 ^fmt2_air
+lcl num ^e ! sum of error codes
+lcl str ^glassname ^srf_type
+lcl num ^flag_realglass ^flag_airspace
+lcl num ^flag_RSOS ^flag_Xpwr ^flag_Ypwr
+lcl num ^flag_XY ^flag_XZ
+lcl str ^syswide_decimal
+
+^syswide_decimal == ^g_decimal_point
+^g_decimal_point == ','
+
+! first pass: set flags
+^eps == 1e-15
+^flag_realglass == 0
+^flag_RSOS == 1
+^flag_Xpwr == 0
+^flag_Ypwr == 0
+for ^i_srf 1 (num s)
+	if not (dum s^i_srf)
+		^glassname == (gla s^i_srf)
+		
+		if locstr(^glassname, '.') = 0 and lenstr(^glassname) > 1
+			^flag_realglass == 1
+		end if
+
+		^srf_type == (typ sur s^i_srf)
+		
+		if ^srf_type = 'CYL'
+			^flag_RSOS == 0
+		end if
+		
+		if absf((cux s^i_srf)) > ^eps
+			^flag_Xpwr == 1
+		end if
+		
+		if absf((cuy s^i_srf)) > ^eps
+			^flag_Ypwr == 1
+		end if
+	end if
+end for
+
+^flag_XY == (^flag_Xpwr and ^flag_Ypwr and (not ^flag_RSOS))
+^flag_XZ == (^flag_Xpwr and (not ^flag_Ypwr) and not ^flag_RSOS)
+
+if ^flag_XY
+	wri "Creating separate columns for X and Y radii"
+end if
+
+if ^flag_XZ
+	wri "Lens is anamorphic with power in XZ only"
+end if
+
+wri "\begin{table}[htbp]"
+wri "\centering"
+wri "%\hspace*{-2cm}"
+
+if ^flag_XY ! two radiuses
+	if ^flag_realglass
+		wri "\begin{tabular}{cccccccc}"
+		wri "\hline"
+		wri "	& & & $n_d$ & $\nu_d$ & Glass & $\diameter_{ap.}$ & sag at $\diameter_{ap.}$ \\"
+		wri "\hline"
+		wri "	& & & $n_0$ = 1 & & & & \\"
+		^fmt1 == "	$r_{'ddd'}^x$ = '10c' & $r_{'ddd'}^y$ = '10c' & & & & & 'dd.dd' & 'd.dd' \\"
+		^fmt2 == "	& & $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 'd.ddd' & 'dd.dd' & '12c' & & \\"
+		^fmt2_air == "	& & $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 1 & & & & \\"
+	else
+		wri "\begin{tabular}{ccccccc}"
+		wri "\hline"
+		wri "	& & & $n_d$ & $\nu_d$ & $\diameter_{ap.}$ & sag at $\diameter_{ap.}$ \\"
+		wri "\hline"
+		wri "	& & & $n_0$ = 1 & & & \\"
+		^fmt1 == "	$r_{'ddd'}^x$ = '10c' & $r_{'ddd'}^y$ = '10c' & & & & 'dd.dd' & 'd.dd' \\"
+		^fmt2 == "	& & $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 'd.ddd' & 'dd.dd' & & \\"
+		^fmt2_air == "	& & $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 1 & & & \\"
+	end if
+else ! one radius
+	if ^flag_realglass
+		wri "\begin{tabular}{ccccccc}"
+		wri "\hline"
+		wri "& & $n_d$ & $\nu_d$ & Glass & $\diameter_{ap.}$ & sag at $\diameter_{ap.}$ \\"
+		wri "\hline"
+		wri "	& & $n_0$ = 1 & & & & \\"
+		^fmt1 == "	$r_{'ddd'}$ = '10c' & & & & & 'dd.dd' & 'd.dd' \\"
+		^fmt2 == "	& $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 'd.ddd' & 'dd.dd' & '12c' & & \\"
+		^fmt2_air == "	& $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 1 & & & & \\"
+	else
+		wri "\begin{tabular}{cccccc}"
+		wri "\hline"
+		wri "& & $n_d$ & $\nu_d$ & $\diameter_{ap.}$ & sag at $\diameter_{ap.}$ \\"
+		wri "\hline"
+		wri "	& & $n_0$ = 1 & & & \\"
+		^fmt1 == "	$r_{'ddd'}$ = '10c' & & & & 'dd.dd' & 'd.dd' \\"
+		^fmt2 == "	& $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 'd.ddd' & 'dd.dd'& & \\"
+		^fmt2_air == "	& $d_{'ddd'}$ = 'ddd.dd' & $n_{'ddd'}$ = 1 & & & \\"
+	end if
+end if
+
+^e == 0
+for ^i_srf 1 (num s)
+	^flag_airspace == ((ind s^i_srf) < 1.01)
+	if not (dum s^i_srf)
+		^cx == (cux s^i_srf)
+		^cy == (cuy s^i_srf)
+		
+		if absf(^cx) < 1e-12
+			^rx_str == '$\infty$'
+		else 
+			^e == ^e + @format("'dddd.ddd'", 1/^cx)
+			^rx_str == ^g_out_str
+		end if
+		
+		if absf(^cy) < 1e-12
+			^ry_str == '$\infty$'
+		else 
+			^e == ^e + @format("'dddd.ddd'", 1/^cy)
+			^ry_str == ^g_out_str
+		end if
+		
+		^e == ^e + @format(^fmt1, ^i_srf) 
+		
+		if ^flag_XY
+			^e == ^e + @format_str(^g_out_str, ^rx_str)
+			^e == ^e + @format(^g_out_str, ^i_srf)
+			^e == ^e + @format_str(^g_out_str, ^ry_str)
+		else if ^flag_XZ
+			^e == ^e + @format_str(^g_out_str, ^rx_str)
+		else ! RSOS
+			^e == ^e + @format_str(^g_out_str, ^ry_str)
+		end if
+			
+		^e == ^e + @format(^g_out_str, 2*(sd s^i_srf))
+		^e == ^e + @format(^g_out_str, @sph_sag_y(^i_srf))
+		wri ^g_out_str
+		
+		if ^flag_airspace
+			^e == ^e + @format(^fmt2_air, ^i_srf)
+		else
+			^e == ^e + @format(^fmt2, ^i_srf) 
+		end if
+
+		^e == ^e + @format(^g_out_str, (thi s^i_srf))
+		^e == ^e + @format(^g_out_str, ^i_srf)
+		
+		if not ^flag_airspace
+			^e == ^e + @format(^g_out_str, (ind s^i_srf))
+			^e == ^e + @format(^g_out_str, (abv s^i_srf))
+			
+			if ^flag_realglass
+				^glassname == (gla s^i_srf)
+				
+				if locstr(^glassname, '.') > 0
+					! model glass
+					^glassname == '-'
+				end if
+				
+				^e == ^e + @format_str(^g_out_str, ^glassname)
+			end if
+		end if
+		
+		wri ^g_out_str
+	end if
+end for
+
+wri "\hline"
+wri "\end{tabular}%"
+wri Q"\caption{'50c'}" (tit)
+wri Q"\label{'50c'}%" concat('t:', (tit))
+wri "\end{table}%"
+
+^g_decimal_point == ^syswide_decimal ! restore
+
+chk no
+ver yes
