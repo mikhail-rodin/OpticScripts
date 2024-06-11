@@ -69,6 +69,30 @@ FCT @thi_zoom_range(num ^i_srf)
 	end if
 END FCT ^range
 
+FCT @sph_sag_x_at_diam(num ^i_srf, num ^D)
+	lcl num ^rsq ^c ^s
+	^rsq == ^D*^D/4
+	^c == (cux s^i_srf)
+	^s == ^c*^rsq/(1 + sqrtf(1 - ^c*^c*^rsq))
+END FCT ^s
+
+FCT @sph_sag_x(num ^i_srf)
+	lcl num ^D
+	^D == 2*(sd s^i_srf)
+END FCT @sph_sag_x_at_diam(^i_srf, ^D)
+
+FCT @sph_sag_y_at_diam(num ^i_srf, num ^D)
+	lcl num ^rsq ^c ^s
+	^rsq == ^D*^D/4
+	^c == (cuy s^i_srf)
+	^s == ^c*^rsq/(1 + sqrtf(1 - ^c*^c*^rsq))
+END FCT ^s
+
+FCT @sph_sag_y(num ^i_srf)
+	lcl num ^D
+	^D == 2*(sd s^i_srf)
+END FCT @sph_sag_y_at_diam(^i_srf, ^D)
+
 FCT @afocal_units2rad_scale
 ! multiply by returned value to get radians
 	str ^units
