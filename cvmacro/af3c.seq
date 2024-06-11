@@ -1,0 +1,197 @@
+! Generates a 3-component galilean system.
+! arg1 - magnification
+! [arg2] - surface to insert after
+!		if not specified, it's inserted right before the last dummy surface
+! [arg3] - hiatus between C1 and C2 as a fraction of overall length, 
+!       i.e. d1/L, default is 0.4
+! [arg4] - overall length L, auto fit if not specified
+! * negative values in args => defaults
+ver no
+chk yes
+
+gbl num ^P(255, 3) ^P_rms_vec(255) ^Petz_vec(255)
+
+lcl num ^P1 ^P2 ^P3 ^absP1_min ^absP1_max
+lcl num ^P_rms ^P_rms_min ^argmin_P_rms
+lcl num ^Petz ^Petz_min ^argmin_Petz
+lcl num ^n ^v ^glasscode ! glass data 
+
+lcl num ^absf1_min ^absf1_max ^rel_absf1_min
+lcl num ^N_P ^i_P1
+lcl num ^f1_ ^f2_ ^f3_
+lcl num ^d0 ^d1 ^d2 ^d1rel ^d_ ^airspace
+lcl num ^t ! lens thickness code, +pos for AR, -neg for abs
+lcl num ^L ^V
+lcl num ^i_srf ^i_ins_after
+lcl str ^response
+
+rfd -1 -1 -1 -1
+
+!----Settings--------------------------------------------------------
+
+^N_P == 100 ! number of evaluation points
+^rel_absf1_min == 0.8 ! times L
+^n == 1.71
+^v == 51
+!--------------------------------------------------------------------
+
+^glasscode == roundf(1000*(^n - 1)) + ^v/100
+
+^V == #1
+^i_ins_after == #2
+^d1rel == #3
+^L == #4
+
+
+if ^V < 0
+	wri "Usage: in af3c V [i_ins_after] [d1/L] [L]"
+	goto EXIT
+end if
+if ^i_ins_after < 0
+	if (num s) < 3
+	! empty system
+		^i_ins_after == 1
+	else
+		for ^i_srf (num s)-1 1 -1
+			if (dum s^i_srf) = 0
+				^i_ins_after == ^i_srf
+				goto FOUND
+			end if
+		end for
+	end if
+end if
+lbl FOUND
+
+^airspace == (thi s^i_ins_after)
+
+if ^L < 0
+	! auto fit into airspace
+	if ^airspace < 3.0
+		wri Q"Insufficiend airspace at surface 'dd' to insert a Galilean" ^i_ins_after
+		goto EXIT
+	end if
+	^L == ^airspace*0.8
+	^d0 == ^airspace*0.05
+	^d_ == ^airspace*0.05
+else 
+	^d0 == ^airspace
+	^d_ == 0
+end if
+
+if ^d1rel < 0
+	^d1rel == 0.4
+end if
+
+^absf1_min == ^rel_absf1_min*^L
+^absP1_max == 1/^absf1_min
+^absP1_min == ^absP1_max/^N_P
+
+^d1 == ^d1rel*^L
+^d2 == ^L - ^d1
+
+^Petz_min == 1e+15
+^P_rms_min == 1e+15
+^argmin_Petz == -1e15
+^argmin_P_rms == -1e15
+
+for ^i_P1 1 ^N_P
+	^P1 == -^absP1_max + ^i_P1*2*^absP1_min
+	^P2 == (^V-^L*^P1*^V-1)/(^V*(^L-^L*^P1*^d1+^P1*^d1**2-^d1))
+	^P3 == (^P1*^V*^d1-^V+1)/^d2
+	
+	^P_rms == sqrtf(^P1*^P1 + ^P2*^P2 + ^P3*^P3)
+	^Petz == (^P1 + ^P2 + ^P2)/^n
+	
+	if ^P_rms < ^P_rms_min
+		^P_rms_min == ^P_rms
+		^argmin_P_rms == ^P1
+	end if
+	
+	if absf(^Petz) < absf(^Petz_min)
+		^Petz_min == ^Petz
+		^argmin_Petz == ^P1
+	end if
+	
+	^P(^i_P1, 1) == 1e3*^P1	
+	^P(^i_P1, 2) == 1e3*^P2
+	^P(^i_P1, 3) == 1e3*^P3
+	^P_rms_vec(^i_P1) == 1e3*^P_rms
+end for
+
+!---plotting---------------------------------------------------------
+out no
+ugr 
+tit "3-group Galilean parax layout"
+xla "Optical power of the 1st group (diopters)"
+yla "Group 2 and 3 power (diopters)"
+
+xax 0
+yax 0
+
+dpo "Optical power of group 2"
+	for ^i_P1 1 ^N_P
+		^P(^i_P1, 1) ^P(^i_P1, 2)
+	end for
+end 
+
+dpo "Optical power of group 3"
+	for ^i_P1 1 ^N_P
+		^P(^i_P1, 1) ^P(^i_P1, 3)
+	end for
+end 
+
+dpo "RMS optical power of 3 groups"
+	for ^i_P1 1 ^N_P
+		^P(^i_P1, 1) ^P_rms_vec(^i_P1)
+	end for
+end 
+
+go
+out yes
+!--P1 selection-------------------------------------------------------
+
+wri Q"Smallest element powers at P1 = '4g.6g' diopters" ^argmin_P_rms*1e3
+wri Q"Minimum field curvature at P1 = '4g.6g' diopters" ^argmin_Petz*1e3
+
+wri "Specify optical power of the 1st group" 
+rpr "P1 >"
+rea ^response
+rpr
+
+^P1 == str_to_num(^response)/1e3
+
+!---P2, P3 calculation------------------------------------------------
+^P2 == (^V-^L*^P1*^V-1)/(^V*(^L-^L*^P1*^d1+^P1*^d1**2-^d1) + 1e-18)
+^P3 == (^P1*^V*^d1-^V+1)/^d2
+
+^f1_ == 1/(^P1 + 1e-15)
+^f2_ == 1/(^P2 + 1e-15)
+^f3_ == 1/(^P3 + 1e-15)
+
+wri Q"f1_ = 'gggg.gggg', d1 = 'gggg.gggg'" ^f1_ ^d1
+wri Q"f2_ = 'gggg.gggg', d2 = 'gggg.gggg'" ^f2_ ^d2
+wri Q"f3_ = 'gggg.gggg'" ^f3_
+
+if (epd) < 0.15*^L
+	^t == -0.08*^L ! abs thickness
+else
+	^t == 0.15
+end if
+
+wri "Proceed?"
+rpr "(y/cancel) >"
+rea ^response
+rpr
+
+if upcase(substr(^response, 1, 1)) <> 'Y'
+	goto EXIT
+end if
+
+in ins_elt ^i_ins_after ^d0 ^f1_ ^glasscode ^t
+in ins_elt ^i_ins_after+2 ^d1 ^f2_ ^glasscode ^t
+in ins_elt ^i_ins_after+4 ^d2 ^f3_ ^glasscode ^t
+thi s^i_ins_after+6 ^d_
+
+lbl EXIT
+chk no
+ver yes
