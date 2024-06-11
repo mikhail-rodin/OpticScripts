@@ -44,8 +44,14 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `lay.seq` - view lens at one (e.g. `in lay 2`) or every (just `in lay` w/o args) zoom position with auto scaling and color coded surface types
 + `xz.seq` - same as `lay.seq`, but XZ section is shown instead of YZ
 + `xy.seq` - 3D plot of a lens
++ `prescr2tex.seq` - generates a LaTeX table with current lens' prescription
 
 ### Lens synthesis & modification
++ `galilean.seq` - insert a 2-group afocal Galilean subsystem
++ `af3c.seq` - layout and insert a 3-group Galilean
+  
+  Plots P2 and P3 (2nd and 3rd lens' power) vs P1, finds optimal P1 values for minimum RMS power and minimum Petzval.
+
 + `reverse.seq` - flip lens & auto-convert fields and pupils
 + `ins_lens.seq` - fully interactive insertion of a subsystem from a lens file
 
@@ -63,7 +69,6 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `bendflip.seq` - flip a singlet w/o changing its power
 + `cement.seq` - convert a singlet into a cemented doublet
 + `move_srf.seq`
-+ `galilean.seq` - insert an afocal galilean subsystem
 + `relay.seq` - create a new lens relaying the current lens' image
 
   Image becomes object, EXP becomes ENP. Fields, wavelengths and image curvature are taken care of.
