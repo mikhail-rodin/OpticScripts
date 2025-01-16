@@ -16,6 +16,10 @@
   
   Generates 3 Zemax files for each of the 'scope's thin lenses. Those can be transformed into thick groups using Russinov's methodology, pre-optimized independently for minimum tolerance sensitivity with a curved field, and eventually assembled into a flat-field system.
 
++ `agf2seq.py` - Zemax to CodeV glass catalogue converter
+  
+  Takes an .agf file and generates a CodeV .seq private catalogue with dispersion coeffs (as opposed to interpolation points).
+
 ## CodeV macros
 
 ### How to use
