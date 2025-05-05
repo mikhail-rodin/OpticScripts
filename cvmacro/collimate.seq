@@ -1,0 +1,105 @@
+ver no 
+chk yes
+
+! Collimate a beam after surface S by varying 
+! up to 4 airspaces d1..4 with an optimizer.
+! Dependencies: libgeom
+
+gbl num ^airspaces(4) ^d_was(4) ^collim
+lcl num ^i ^srf ^almost_collimated ^flag_img_space ^flag_RSOS
+lcl num ^divergence_was_x ^divergence_was_y ^divergence_is_x ^divergence_is_y
+
+rfd -10 -10 -10 -10 -10
+^collim == #1
+^airspaces(1) == #3
+^airspaces(2) == #4
+^airspaces(3) == #2
+^airspaces(4) == #5
+
+^flag_RSOS == ((sym) = 'ROT')
+^flag_img_space == 0
+
+if ^collim < 0
+	wri "Usage: in collimate S d1 [d2 [d3 [d4]]]"
+	wri "   Beam after surface S will be collimated"
+	wri "   by varying up to 4 airspaces with surface indices d1..4"
+	goto EXIT
+else if @afocal and (^collim = (num s) or ^collim = (num s)-1)
+	^flag_img_space == 1
+end if
+
+frz sa
+for ^i 1 4
+	^srf == ^airspaces(^i)
+	if ^srf >= 0 ! specified
+		if (ind s^srf) > 1.01
+			wri "One of the provided adjustment parameters is glass thickness."
+			wri "Specify airspaces only. Bailing out."
+			goto EXIT
+		end if
+		^d_was(^i) == (thi s^srf)
+		thc s^srf 0
+	end if
+end for
+
+^divergence_was_x == atanf((l s^collim r4 f1)/(n s^collim r4 f1))*180/3.141593
+^divergence_was_y == atanf((m s^collim r2 f1)/(n s^collim r2 f1))*180/3.141593
+
+^almost_collimated == tanf(3.14*2/180)
+auto
+	err con
+	del 0.1 ! tight grid ~100 rays
+	cnv 0.2 ! don't rush convergence
+	
+	mxa
+	mae 0
+	mna 0
+	
+	if not ^flag_RSOS
+		@ux == (l s^collim r4 f1)/(n s^collim r4 f1) ! tg(sigma_x_i)	
+		@ux < ^almost_collimated > -^almost_collimated
+		@ux = 0
+		wtc 10
+	end if
+	
+	@uy == (m s^collim r2 f1)/(n s^collim r2 f1) ! tg(sigma_y_i)
+	@uy < ^almost_collimated > -^almost_collimated
+	@uy = 0
+	wtc 10
+		
+	mxc 20
+	imp 1e-12 ! optimize no matter what
+	dra y
+go
+
+wri
+wri 
+wri
+if ^flag_img_space
+	wri "The lens is a collimator and therefore was optimized as an afocal system"
+	wri "for minimum angular spot size."
+else
+	wri Q"The macro tried to achive collimation after surface 'ddd'" ^collim
+end if
+
+^divergence_is_x == atanf((l s^collim r4 f1)/(n s^collim r4 f1))*180/3.141593
+^divergence_is_y == atanf((m s^collim r2 f1)/(n s^collim r2 f1))*180/3.141593
+
+wri
+if ^flag_RSOS
+	wri Q"Divergence before: '4g.4g' deg" ^divergence_was_y
+	wri Q"Divergence after:  '4g.4g' deg" ^divergence_is_y
+end if
+
+wri
+wri "Thickness adjustments:"
+for ^i 1 4
+	^srf == ^airspaces(^i)
+	if ^srf >= 0 ! specified
+		wri Q"Surface 'ddd': '4g.4g' -> '4g.4g'" ^srf ^d_was(^i) (thi s^srf)
+	end if
+end for
+
+lbl EXIT
+chk no
+ver yes
