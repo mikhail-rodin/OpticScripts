@@ -1,4 +1,4 @@
-! inserts a bended plate
+! inserts a bent plate
 ! glass is TK21 by 
 ! arg1 - surface to insert after
 ! [arg2] - relative position as a fraction of the airspace
@@ -15,8 +15,12 @@ rfd -1 0.5 200 66.51
 
 ^ins_after == #1 
 if ^ins_after < 0
-	wri "please specify the surface after which the element is inserted"
-	rtn
+	wri "Usage: ins_plate S [d=0.5] [r=200] [glasscode=66.51]"
+	wri "	Inserts a glass plate with no optical power after surface S"
+	wri "	[d] is relative position as a fraction of airspace after S"
+	wri "	[r] is radius of bending"
+	wri "   Specify a negative [glasscode] to insert an air meniscus into glass"
+	goto EXIT
 end if
 ^relpos == #2
 ^r == #3
@@ -36,8 +40,12 @@ thi s^ins_after+1 ^d_elt
 thc s^ins_after+1 0
 thi s^ins_after+2 ^d_after
 thc s^ins_after+2 0
-GL1 s^ins_after+1 ^glasscode
-gc1 s^ins_after+1 0
+if ^glasscode < 0 ! air 
+	gl1 s^ins_after+1
+else
+	GL1 s^ins_after+1 ^glasscode
+	gc1 s^ins_after+1 0
+end if
 rdy s^ins_after+1 ^r
 ccy s^ins_after+1 0
 rdy s^ins_after+2 ^r
@@ -46,5 +54,6 @@ ccy s^ins_after+2 0
 vie 
 go
 
+lbl EXIT
 chk no
 ver yes
