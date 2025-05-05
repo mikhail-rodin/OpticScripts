@@ -1,0 +1,69 @@
+ver no
+chk yes
+
+! Sets EFL via a curvature solve on the last surface,
+! so that there's one less variable and one less constrain in optimization.
+
+lcl num ^efl ^D ^i_first_srf ^u_ ^sigma_ ^i_last_srf ^i
+
+rfd 0 -1
+
+^efl == #1
+^i_first_srf == #2
+
+if ^efl = 0
+	wri "Usage: efl_curv_solve EFL [S1]"
+	wri "   In case EFL is specified for the rear subsystem (e.g. a tube lens),"
+	wri "   the index of its first surface S1 is needed too."
+	wri "   Subsystem's last surface is the one before the image."
+	wri "   Otherwise EFL is better controlled via constraints."
+	goto EXIT
+end if
+
+if (num z) > 1
+	wri "Method is not applicable to zooms."
+	goto EXIT
+end if
+
+if not ((typ ape) = 'NAO' or (typ ape) = 'EPD')
+	wri "Only NAO and EPD apertures supported."
+	wri "Use an optimization constraint."
+	goto EXIT
+end if
+
+if ^i_first_srf < 0 ! EFL for the whole lens
+	^D == (epd)
+else ! rear part of the lens, equiv. to (efy s^i_first_srf..i) constrain
+	^D == @local_expd_y_after(1, ^i_first_srf-1)
+end if
+
+! we have to find the last glass surface
+^i_last_srf == -1
+for ^i (num s) 1 -1
+	if (ind s^i-1) > 1.01 ! glass
+		^i_last_srf == ^i
+		goto FOUND
+	end if
+end for
+lbl FOUND
+
+if ^i_last_srf < 0
+	wri "No glass surfaces found, nothing to bend."
+	goto EXIT
+end if
+
+^u_ == 0.5*^D/^efl ! = tg(sigma')
+^sigma_ == atanf(^u_)
+cuy s^i_last_srf umy -^sigma_
+
+wri
+wri Q"Marginal ray angle after surface 'ddd' set to '4g.4g' deg." ^i_last_srf 180*^sigma_/3.1416
+if ^i_first_srf < 0
+	wri Q"EFL of the lens is now '4g.4g'" (efl)
+else
+	wri Q"EFL of a subsystem composed of surfaces 'dd'..'dd' is '4g.4g'" ^i_first_srf ^i_last_srf (efy s^i_first_srf..i-1)
+end if
+
+lbl EXIT
+chk no
+ver yes
