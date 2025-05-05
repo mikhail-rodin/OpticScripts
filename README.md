@@ -43,6 +43,7 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 + `petz.seq` - element power distribution and Petzval sums
 + `amag.seq` - afocal magnification
 + `mtf.seq` - resolution figures for any 2 modulation values (default is 0.2 and 0.3)
++ `beams.seq` - parameters (NA, obliquity, vignetting) of axial and edge-of-field beams for every surface
 
 ### Plotting
 + `lay.seq` - view lens at one (e.g. `in lay 2`) or every (just `in lay` w/o args) zoom position with auto scaling and color coded surface types
@@ -79,12 +80,15 @@ These macros, as dowloaded from GitHub, are in UTF8. But since they only use ISO
 
 + `sph2xcyl.seq`, `sph2ycyl.seq` - convert surfaces M..N into X or Y cylinders
 + `apertures.seq` - auto set hard apertures (rectangular if element is not rotationally symmetric).
++ `efl_curv_solve.seq` - set up a solve that makes the last element's rear curvature maintain an image-space NA corresponding to the desired EFL of the whole lens or its rear subsystem (useful for things like tube lenses or relays).
 
 ### Optimization
 
 + `wtz.seq` - matrix of optimization weigths for each field at every zoom position
 
   All field weights for a given zoom position can be scaled at once with `in wtz [z] [multiplier]` - `wtz.seq` acts like a 'missing' WTZ command would've acted.
+
++ `collimate.seq` - attain a collimated beam in the specified airspace by varying up to 4 airspace thicknesses.
 
 ### Fields setup
 + `fields_diag.seq` - N equal-area field rings
