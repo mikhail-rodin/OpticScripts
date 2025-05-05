@@ -1,0 +1,85 @@
+ver no
+chk yes
+
+! Analyzes two beams in the lens: 
+!	axial in terms of how its aperture (NA and width) change,
+!   edge-of-field bems in terms of ray obliquity.
+
+lcl num ^i_srf ^flag_rotsym
+lcl num ^n_ ^pi
+lcl num ^Dx ^Dy ^umx ^umy ^sigma_x ^sigma_y ^NAx ^NAy ! axial beam
+lcl num ^i_maxf_x ^i_maxf_y
+lcl num ^ucx ^ucy ^Dx_off_axis ^Dy_off_axis ^vig_x ^vig_y ! edge-of-field beam
+lcl num ^ellipticity ^max_ellipticity
+lcl str ^template_RTOS_air ^template_RTOS_glass ^hline_RTOS 
+lcl str ^template_XY_air ^template_XY_glass ^hline_XY 
+lcl str ^template ^hline
+
+^flag_rotsym == ((sym) = 'ROT')
+^i_maxf_x == @arg_max_x_field
+^i_maxf_y == @arg_max_y_field
+^pi == 3.1415926
+
+^hline_RTOS == "+---+------------+------------------+"
+^hline_XY ==   "+---+------------+------------------+------------+------------------+"
+
+^template_RTOS_glass == "|'ddd'|'dddd.dd'  'ddd'|'dd.ddd' 'dd.ddd' 'dd.d'|"
+^template_RTOS_air ==   "|'ddd'|'dddd.dd'  'ddd'|'dd.ddd'        'dd.d'|"
+
+^template_XY_glass == "|'ddd'|'dddd.dd'  'ddd'|'dd.ddd' 'dd.ddd' 'dd.d'|'dddd.dd'  'ddd'|'dd.ddd' 'dd.ddd' 'dd.d'|"
+^template_XY_air   == "|'ddd'|'dddd.dd'  'ddd'|'dd.ddd'        'dd.d'|'dddd.dd'  'ddd'|'dd.ddd'        'dd.d'|"
+
+if ^flag_rotsym
+	^hline == ^hline_RTOS
+	wri ^hline
+	wri "|   |  Chief ray |    Axial beam    |"
+	wri "| S | deg   vig,%|   NA   NA/n  f/# |"
+	wri ^hline
+else 
+	^hline == ^hline_XY
+	wri ^hline
+	wri "|   | Chief   X  |  Axial beam  X   |  Chief  Y  |  Axial beam  Y   |"
+	wri "| S | deg   vig,%|   NA   NA/n  f/# | deg   vig,%|   NA   NA/n  f/# |"
+	wri ^hline
+end if
+
+for ^i_srf 0 (num s)-1
+	^n_ == (ind s^i_srf)
+	
+	! Note: in CV ray cosines are provided for refracted rays AFTER the surface
+	^umx == (l s^i_srf r4 f1)/(n s^i_srf r4 f1) ! tg(sigma_x_i)
+	^umy == (m s^i_srf r2 f1)/(n s^i_srf r2 f1) ! tg(sigma_y_i)
+	^Dx  == (x s^i_srf r4 f1)-(x s^i_srf r5 f1) 
+	^Dy  == (y s^i_srf r2 f1)-(y s^i_srf r3 f1) 
+	^NAx == ^n_*sinf(atanf(^umx))
+	^NAy == ^n_*sinf(atanf(^umy))
+	
+	^ucx == (l s^i_srf r1 f^i_maxf_x)/(n s^i_srf r1 f^i_maxf_x) ! tg(w_x_i)
+	^ucy == (m s^i_srf r1 f^i_maxf_y)/(n s^i_srf r1 f^i_maxf_y) ! tg(w_y_i)
+	^Dx_off_axis  == (x s^i_srf r4 f^i_maxf_x)-(x s^i_srf r5 f^i_maxf_x) 
+	^Dy_off_axis  == (y s^i_srf r2 f^i_maxf_y)-(y s^i_srf r3 f^i_maxf_y)
+	
+	^vig_x == 1-^Dx_off_axis/(^Dx+1e-12)
+	^vig_y == 1-^Dy_off_axis/(^Dy+1e-12)
+	
+	if ^flag_rotsym
+		if (ind s^i_srf) > 1.01 ! glass
+			wri Q^template_RTOS_glass ^i_srf ^ucy*180/^pi 100*^vig_y ^NAy ^NAy/^n_ absf(1/(2*^NAy+1e-10))
+		else
+			wri Q^template_RTOS_air   ^i_srf ^ucy*180/^pi 100*^vig_y ^NAy          absf(1/(2*^NAy+1e-10))
+		end if
+	else 
+		if (ind s^i_srf) > 1.01 ! glass
+			wri Q^template_XY_glass ^i_srf ^ucx*180/^pi 100*^vig_x ^NAx ^NAx/^n_ absf(1/(2*^NAx+1e-10)) &
+			                               ^ucy*180/^pi 100*^vig_y ^NAy ^NAy/^n_ absf(1/(2*^NAy+1e-10))
+		else
+			wri Q^template_XY_air   ^i_srf ^ucx*180/^pi 100*^vig_x ^NAx          absf(1/(2*^NAx+1e-10)) &
+		                                   ^ucy*180/^pi 100*^vig_y ^NAy          absf(1/(2*^NAy+1e-10))
+		end if
+	end if
+end for
+wri ^hline
+
+lbl EXIT
+chk no
+ver yes
